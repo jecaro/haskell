@@ -1,5 +1,10 @@
 module Main where
 
+-- TODO 
+-- Change string based answer for type
+-- Decrement count trial only on errors
+-- Remove non alpha characters
+
 -- For random numbers
 import System.Random
 import System.Environment
@@ -9,7 +14,6 @@ import Control.Monad.State
 import Text.Read
 -- For Exception handling
 import Control.Exception
-
 
 -- Convert the secret word to the form -x-y---
 guess :: String -> String -> String
@@ -115,6 +119,7 @@ main = do
 
                     -- Clean up what we read in the file
                     let words = filter (not . null) $ map sanitize $ lines dict
-
-                    startPlay words count
+                    if null words
+                        then putStrLn "Empty dictionary"
+                        else startPlay words count
 
