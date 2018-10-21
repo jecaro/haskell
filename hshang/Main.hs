@@ -1,8 +1,5 @@
 module Main where
 
--- TODO 
--- Remove non alpha characters
-
 -- For random numbers
 import           System.Random
 import           System.Environment
@@ -13,9 +10,25 @@ import           Text.Read
 -- For Exception handling
 import           Control.Exception
 
+-- List of allowable chars
+alpha :: String
+alpha = ['a'..'z'] ++ ['A'..'Z']
+
 -- Convert the secret word to the form -x-y---
 guess :: String -> String -> String
 guess word chars = map (\x -> if x `elem` chars then x else '-') word
+
+-- Loop until the user send actual char
+getAlphaChar :: IO Char
+getAlphaChar = do
+    putStrLn "What is you character ?"
+    c <- getChar
+    if c `elem` alpha
+        then return c 
+        else do
+            putStrLn ""
+            putStrLn "This character is not allowed"
+            getAlphaChar    
 
 -- Play loop
 play :: String -> String -> Int -> IO ()
@@ -25,7 +38,7 @@ play secret letters count = do
   putStrLn $ "Still " ++ show count ++ " trials"
 
   -- Get the char
-  c <- getChar
+  c <- getAlphaChar
   putStrLn ""
 
   if c `elem` letters
@@ -101,6 +114,12 @@ startPlay words count = do
   answer <- getAnswer
   when (answer == Yes) main
 
+-- Check if a word read in the file is valid
+validWord :: String -> Bool
+validWord [] = False
+validWord w = w == filtered
+    where filtered = filter (`elem` alpha) w
+              
 main :: IO ()
 main = do
 
@@ -122,7 +141,8 @@ main = do
         Right dict   -> do
 
             -- Clean up what we read in the file
-          let words = filter (not . null) $ map sanitize $ lines dict
+          let words = filter validWord $ map sanitize $ lines dict
+          print words
           if null words
             then putStrLn "Empty dictionary"
             else startPlay words count
