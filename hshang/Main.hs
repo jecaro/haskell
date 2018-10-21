@@ -1,7 +1,6 @@
 module Main where
 
 -- TODO 
--- Change string based answer for type
 -- Remove non alpha characters
 
 -- For random numbers
@@ -47,15 +46,25 @@ play secret letters count = do
             let count' = if c `elem` secret then count else count - 1 
             play secret letters' count'
 
+-- Simple data type to handle an answer
+data Answer = Yes | No 
+    deriving Eq
+
+-- Convert a string to an answer
+strToAnswer :: String -> Maybe Answer
+strToAnswer "yes" = Just Yes
+strToAnswer "no" = Just No
+strToAnswer _ = Nothing
+
 -- Answer to the question would play again ?
-getAnswer :: IO String
+getAnswer :: IO Answer
 getAnswer = do
   cmd <- getLine
-  if cmd `elem` ["yes", "no"]
-    then return cmd
-    else do
-      putStrLn "I did not understand"
-      getAnswer
+  case strToAnswer cmd of
+    Nothing -> do 
+        putStrLn "I did not understand"
+        getAnswer
+    Just x -> return x
 
 -- Clean up a string at the beginning and the end
 sanitize :: String -> String
@@ -90,7 +99,7 @@ startPlay words count = do
 
   -- Getting answer
   answer <- getAnswer
-  when (answer /= "no") main
+  when (answer == Yes) main
 
 main :: IO ()
 main = do
