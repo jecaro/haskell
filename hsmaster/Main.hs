@@ -65,35 +65,38 @@ getValidCmd n values = do
             putStrLn $ "Invalid input: " ++ cmd'
             getValidCmd n values
 
+data GameConfig = GameConfig { maxTrials :: Int 
+                             , values :: String
+                             , nbLetters :: Int
+                             , secret :: String }
+
 -- Play loop
-play :: Int -> String -> String -> IO ()
-play n values secret = do
+play :: GameConfig -> IO ()
+play gc@(GameConfig maxTrials values nbLetters secret) = do
     -- Read the first char
-    cmd <- getValidCmd n values
+    cmd <- getValidCmd nbLetters values
     endOfLineIfNeeded cmd
     unless (cmd == "q") $ do
         let result = compute secret cmd
-        if fst result == n 
+        if fst result == nbLetters 
             then putStrLn "You won !"
             else do
                 putStrLn $ "Good       : " ++ show (fst result)
                 putStrLn $ "Almost good: " ++ show (snd result)
-                play n values secret
+                play gc
 
 main :: IO ()
 main = do
-    -- Number of letters to guess
-    let n = 4
-    
-    -- Current IO generator
-    gen <- getStdGen
-
-    -- The values to choose among
+    let nbLetters = 4
     let values = ['0'..'9']
 
     -- Secret word to guess
-    let secret = take n $ shuffle values gen
+    gen <- getStdGen
+    let secret = take nbLetters $ shuffle values gen
     putStrLn secret
 
+    -- Configuration of the game
+    let config = GameConfig 10 values nbLetters secret
+
     -- Lets play
-    play n values secret
+    play config
