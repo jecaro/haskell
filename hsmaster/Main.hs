@@ -65,14 +65,17 @@ getValidCmd n values = do
             putStrLn $ "Invalid input: " ++ cmd'
             getValidCmd n values
 
-data GameConfig = GameConfig { maxTrials :: Int 
-                             , values :: String
-                             , nbLetters :: Int
-                             , secret :: String }
+data GameConfig = GameConfig {
+    trials :: Int,     -- Number of remaining trials
+    values :: String,  -- Possible values for secret
+    secret :: String } -- Secret wrod
+
+nextTrial gc@(GameConfig t _ _) = gc { trials = t - 1 }
 
 -- Play loop
 play :: GameConfig -> IO ()
-play gc@(GameConfig maxTrials values nbLetters secret) = do
+play gc@(GameConfig trials values secret) = do
+    let nbLetters = length secret
     -- Read the first char
     cmd <- getValidCmd nbLetters values
     endOfLineIfNeeded cmd
@@ -83,7 +86,7 @@ play gc@(GameConfig maxTrials values nbLetters secret) = do
             else do
                 putStrLn $ "Good       : " ++ show (fst result)
                 putStrLn $ "Almost good: " ++ show (snd result)
-                play gc
+                unless (trials == 0) $ play $ nextTrial gc
 
 main :: IO ()
 main = do
@@ -96,7 +99,7 @@ main = do
     putStrLn secret
 
     -- Configuration of the game
-    let config = GameConfig 10 values nbLetters secret
+    let config = GameConfig (3 - 1) values secret
 
     -- Lets play
     play config
