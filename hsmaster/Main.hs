@@ -74,24 +74,28 @@ data GameConfig = GameConfig {
     values :: String,  -- Possible values for secret
     secret :: String } -- Secret wrod
 
+-- Decrement the number of trials
 nextTrial gc@(GameConfig t _ _) = gc { trials = t - 1 }
 
 -- Play loop
 play :: GameConfig -> IO ()
+play gc@(GameConfig 0 _ _) = putStrLn "You lose"
 play gc@(GameConfig trials values secret) = do
   let nbLetters = length secret
-  -- Read the first char
+
   cmd <- getValidCmd nbLetters values
   endOfLineIfNeeded cmd
+
   unless (cmd == "q") $ do
+
     let result = compute secret cmd
+
     if fst result == nbLetters
       then putStrLn "You won !"
       else do
         putStrLn $ "Good       : " ++ show (fst result)
         putStrLn $ "Almost good: " ++ show (snd result)
-        -- TODO put in pattern matching
-        unless (trials == 1) $ play $ nextTrial gc
+        play $ nextTrial gc
 
 main :: IO ()
 main = do
