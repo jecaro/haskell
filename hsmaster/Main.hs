@@ -47,6 +47,7 @@ getNextCmd maxLength word = do
 endWidthN cmd = last cmd == '\n'
 
 -- Output \n if parameter do not end with it
+endOfLineIfNeeded :: String -> IO ()
 endOfLineIfNeeded cmd = unless (endWidthN cmd) $ putStrLn ""
 
 -- Return the validity of the guess
@@ -58,11 +59,14 @@ valid guess n values =
 
 -- Loop until it gets a valid command from prompt. It can be
 -- 'q' or any valid word
+-- TODO use StateT
 getValidCmd :: Int -> String -> IO String
 getValidCmd n values = do
   cmd <- getNextCmd n ""
   if cmd == "q" || valid cmd n values
-    then return cmd
+    then do
+      endOfLineIfNeeded cmd
+      return cmd
     else do
       let cmd' = if endWidthN cmd then init cmd else cmd
       endOfLineIfNeeded cmd
@@ -77,25 +81,36 @@ data GameConfig = GameConfig {
 -- Decrement the number of trials
 nextTrial gc@(GameConfig t _ _) = gc { trials = t - 1 }
 
--- Play loop
-play :: GameConfig -> IO ()
-play gc@(GameConfig 0 _ _) = putStrLn "You lose"
-play gc@(GameConfig trials values secret) = do
-  let nbLetters = length secret
+-- Print output of guess and return True if the game ended
+printOutputAndStop :: String -> String -> IO Bool
+printOutputAndStop secret "q" = return True
+printOutputAndStop secret guess = do
+  let won = secret == guess
+  if won
+    then putStrLn "You won !"
+    else do
+      let result = compute secret guess
+      putStrLn $ "Good       : " ++ show (fst result)
+      putStrLn $ "Almost good: " ++ show (snd result)
+  return won
 
-  cmd <- getValidCmd nbLetters values
-  endOfLineIfNeeded cmd
+play :: StateT GameConfig IO ()
+play = do
+  gc@(GameConfig trials values secret) <- get 
 
-  unless (cmd == "q") $ do
+  if trials == 0 
+    then liftIO $ putStrLn "You lose !"
+    else do
 
-    let result = compute secret cmd
+      let nbLetters = length secret
 
-    if fst result == nbLetters
-      then putStrLn "You won !"
-      else do
-        putStrLn $ "Good       : " ++ show (fst result)
-        putStrLn $ "Almost good: " ++ show (snd result)
-        play $ nextTrial gc
+      cmd <- liftIO $ getValidCmd nbLetters values
+
+      stop <- liftIO $ printOutputAndStop secret cmd
+
+      unless stop $ do
+        put $ nextTrial gc
+        play
 
 main :: IO ()
 main = do
@@ -113,4 +128,4 @@ main = do
   let config = GameConfig nbTrials values secret
 
   -- Lets play
-  play config
+  evalStateT play config
