@@ -2,6 +2,7 @@ import           System.Random
 import           System.IO
 import           Control.Monad
 import           Data.List
+import           Control.Monad.State
 
 -- TODO 
 -- clear screen and show stack of guess
@@ -14,13 +15,13 @@ pick list ind = (list !! ind, start ++ end)
   start = take ind list
   end   = drop (succ ind) list
 
--- Shuffle a list
-shuffle :: RandomGen g => [a] -> g -> [a]
-shuffle [] gen = []
-shuffle list gen =
-  let (ind, gen' ) = randomR (0, length list - 1) gen
-      (val, list') = pick list ind
-  in  val : shuffle list' gen'
+-- Shuffle a list 
+shuffle :: RandomGen g => [a] -> State g [a]
+shuffle [] = return []
+shuffle list = do
+  ind <- state $ randomR (0, length list - 1) 
+  let (val, list') = pick list ind
+  fmap (val:) (shuffle list') 
 
 -- Compute the result of the guess
 compute :: Eq a => [a] -> [a] -> (Int, Int)
@@ -89,20 +90,23 @@ play gc@(GameConfig trials values secret) = do
       else do
         putStrLn $ "Good       : " ++ show (fst result)
         putStrLn $ "Almost good: " ++ show (snd result)
-        unless (trials == 0) $ play $ nextTrial gc
+        -- TODO put in pattern matching
+        unless (trials == 1) $ play $ nextTrial gc
 
 main :: IO ()
 main = do
+  -- Game configuration
   let nbLetters = 4
   let values    = ['0' .. '9']
+  let nbTrials  = 3
 
   -- Secret word to guess
   gen <- getStdGen
-  let secret = take nbLetters $ shuffle values gen
+  let secret = take nbLetters $ evalState (shuffle values) gen
   putStrLn secret
 
   -- Configuration of the game
-  let config = GameConfig (3 - 1) values secret
+  let config = GameConfig nbTrials values secret
 
   -- Lets play
   play config
