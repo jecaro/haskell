@@ -109,7 +109,7 @@ play = do
       stop <- liftIO $ printOutputAndStop secret cmd
 
       unless stop $ do
-        put $ nextTrial gc
+        modify nextTrial 
         play
 
 main :: IO ()
