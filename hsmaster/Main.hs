@@ -68,18 +68,20 @@ endOfLineIfNeeded cmd = unless (endWidthN cmd) $ putStrLn ""
 -- - the right length
 -- - no repeated letters
 -- - correct values
-validCmd "q" _ _ = True
-validCmd guess n values = (length guess == n) && 
-                          not (hasRepeated guess) && 
-                          all (`elem` values) guess
+validCmd :: String -> ReaderT (Int, String) IO Bool
+validCmd "q" = return True
+validCmd guess = do
+   (n, values) <- ask
+   return $ (length guess == n) && not (hasRepeated guess) && all (`elem` values) guess
 
 -- Loop until it gets a valid command from prompt. It can be
 -- 'q' or any valid word
 getValidCmd :: ReaderT (Int, String) IO String
 getValidCmd = do
   (n, values) <- ask
-  cmd <- liftIO $ getNextCmd n 
-  if validCmd cmd n values
+  cmd <- liftIO $ getNextCmd n
+  valid <- validCmd cmd
+  if valid
     then do
       liftIO $ endOfLineIfNeeded cmd
       return cmd
