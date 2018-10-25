@@ -3,6 +3,7 @@ import           System.IO
 import           Control.Monad
 import           Data.List
 import           Control.Monad.State
+import           Control.Monad.Reader
 
 -- TODO 
 -- clear screen and show stack of guess
@@ -67,24 +68,26 @@ endOfLineIfNeeded cmd = unless (endWidthN cmd) $ putStrLn ""
 -- - the right length
 -- - no repeated letters
 -- - correct values
-valid guess n values =
-  (length guess == n) && not (hasRepeated guess) && all (`elem` values) guess
+validCmd "q" _ _ = True
+validCmd guess n values = (length guess == n) && 
+                          not (hasRepeated guess) && 
+                          all (`elem` values) guess
 
 -- Loop until it gets a valid command from prompt. It can be
 -- 'q' or any valid word
--- TODO use StateT
-getValidCmd :: Int -> String -> IO String
-getValidCmd n values = do
-  cmd <- getNextCmd n
-  if cmd == "q" || valid cmd n values
+getValidCmd :: ReaderT (Int, String) IO String
+getValidCmd = do
+  (n, values) <- ask
+  cmd <- liftIO $ getNextCmd n 
+  if validCmd cmd n values
     then do
-      endOfLineIfNeeded cmd
+      liftIO $ endOfLineIfNeeded cmd
       return cmd
     else do
       let cmd' = if endWidthN cmd then init cmd else cmd
-      endOfLineIfNeeded cmd
-      putStrLn $ "Invalid input: " ++ cmd'
-      getValidCmd n values
+      liftIO $ endOfLineIfNeeded cmd
+      liftIO $ putStrLn $ "Invalid input: " ++ cmd'
+      getValidCmd
 
 -- TODO pass values and secret in Reader Monad
 data GameConfig = GameConfig {
@@ -116,9 +119,7 @@ play = do
     then liftIO $ putStrLn "You lose !"
     else do
 
-      let nbLetters = length secret
-
-      cmd <- liftIO $ getValidCmd nbLetters values
+      cmd <- liftIO $ runReaderT getValidCmd (length secret, values)
 
       stop <- liftIO $ printOutputAndStop secret cmd
 
