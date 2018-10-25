@@ -33,15 +33,28 @@ compute secret guess = (goodSpot, good - goodSpot)
 hasRepeated :: (Eq a, Ord a) => [a] -> Bool
 hasRepeated w = any (\x -> length x >= 2) $ group $ sort w
 
+-- Recursive function to get the next command
+getNextCmd' :: StateT (Int, String) IO ()
+getNextCmd' = do
+  -- Get the state
+  (n, word) <- get
+  -- Where not finished
+  unless (n == 0) $ do 
+    c <- liftIO getChar
+    let word' = word ++ [c]
+    -- Update state
+    put (n - 1, word')
+    -- Go recursive
+    unless (c == 'q' || c == '\n') getNextCmd'
+
 -- Get input of specific size or 'q' or ending with \n
-getNextCmd :: Int -> String -> IO String
-getNextCmd 0         word = return word
-getNextCmd maxLength word = do
-  c <- getChar
-  let word' = word ++ [c]
-  if c == 'q' || c == '\n'
-    then return word'
-    else getNextCmd (maxLength - 1) word'
+-- Int : max number of chars to read before stopping
+getNextCmd :: Int -> IO String
+getNextCmd n = do 
+  -- Start the recursive function
+  s <- execStateT getNextCmd' (n, "")
+  -- Get the word
+  return $ snd s
 
 -- String ends with \n
 endWidthN cmd = last cmd == '\n'
@@ -62,7 +75,7 @@ valid guess n values =
 -- TODO use StateT
 getValidCmd :: Int -> String -> IO String
 getValidCmd n values = do
-  cmd <- getNextCmd n ""
+  cmd <- getNextCmd n
   if cmd == "q" || valid cmd n values
     then do
       endOfLineIfNeeded cmd
@@ -73,10 +86,11 @@ getValidCmd n values = do
       putStrLn $ "Invalid input: " ++ cmd'
       getValidCmd n values
 
+-- TODO pass values and secret in Reader Monad
 data GameConfig = GameConfig {
     trials :: Int,     -- Number of remaining trials
     values :: String,  -- Possible values for secret
-    secret :: String } -- Secret wrod
+    secret :: String } -- Secret word
 
 -- Decrement the number of trials
 nextTrial gc@(GameConfig t _ _) = gc { trials = t - 1 }
