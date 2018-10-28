@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 import           System.Random
 import           System.IO
 import           Control.Monad
@@ -68,7 +70,7 @@ endOfLineIfNeeded cmd = unless (endWidthN cmd) $ putStrLn ""
 -- - the right length
 -- - no repeated letters
 -- - correct values
-validCmd :: String -> ReaderT (Int, String) IO Bool
+validCmd :: MonadReader (Int, String) m => String -> m Bool
 validCmd "q" = return True
 validCmd guess = do
    (n, values) <- ask
@@ -91,14 +93,15 @@ getValidCmd = do
       liftIO $ putStrLn $ "Invalid input: " ++ cmd'
       getValidCmd
 
--- TODO pass values and secret in Reader Monad
+-- Number of remaining trials
+newtype GameState = GameState{trials :: Int} 
+
 data GameConfig = GameConfig {
-    trials :: Int,     -- Number of remaining trials
-    values :: String,  -- Possible values for secret
-    secret :: String } -- Secret word
+  values :: String,  -- Possible values for secret
+  secret :: String } -- Secret word
 
 -- Decrement the number of trials
-nextTrial gc@(GameConfig t _ _) = gc { trials = t - 1 }
+nextTrial gs@(GameState t) = gs { trials = t - 1 }
 
 -- Print output of guess and return True if the game ended
 printOutputAndStop :: String -> String -> IO Bool
@@ -113,9 +116,10 @@ printOutputAndStop secret guess = do
       putStrLn $ "Almost good: " ++ show (snd result)
   return won
 
-play :: StateT GameConfig IO ()
+play :: ReaderT GameConfig (StateT GameState IO) ()
 play = do
-  gc@(GameConfig trials values secret) <- get 
+  gc@(GameConfig values secret) <- ask
+  gs@(GameState trials) <- get 
 
   if trials == 0 
     then liftIO $ putStrLn "You lose !"
@@ -128,7 +132,7 @@ play = do
       unless stop $ do
         modify nextTrial 
         play
-
+        
 main :: IO ()
 main = do
   -- Game configuration
@@ -141,8 +145,11 @@ main = do
   let secret = take nbLetters $ evalState (shuffle values) gen
   putStrLn secret
 
-  -- Configuration of the game
-  let config = GameConfig nbTrials values secret
+  -- State of the game
+  let state = GameState nbTrials 
+
+  -- Config of the game
+  let config = GameConfig values secret
 
   -- Lets play
-  evalStateT play config
+  evalStateT (runReaderT play config) state
