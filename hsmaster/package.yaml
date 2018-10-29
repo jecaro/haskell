@@ -1,0 +1,23 @@
+copyright: 2018 Jean-Charles Quillet
+maintainer: jeancharles.quillet@gmail.com
+dependencies:
+- base >= 4.7 && < 5
+- mtl
+- random
+
+name: hsmaster
+version: 0.1.0.0
+extra-source-files:
+- README.md
+author: Jean-Charles Quillet
+github: jecaro/haskell/hsmaster
+license: BSD3
+executables:
+  hsmaster:
+    source-dirs: ./
+    main: Main.hs
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+description: Please see the README on GitHub at <https://github.com/jecaro/hsmaster#readme>
