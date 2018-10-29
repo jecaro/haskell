@@ -115,8 +115,8 @@ printOutputAndStop secret guess =
  
 play :: ReaderT GameConfig (StateT GameState IO) ()
 play = do
-  gc@(GameConfig values secret) <- ask
-  gs@(GameState trials) <- get 
+  (GameConfig values secret) <- ask
+  (GameState trials) <- get 
 
   if trials == 0 
     then liftIO $ putStrLn "You lose !"
