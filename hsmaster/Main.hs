@@ -135,6 +135,10 @@ play = do
         
 main :: IO ()
 main = do
+
+  -- No buffering mode on stdio
+  hSetBuffering stdin NoBuffering
+
   -- Game configuration
   let nbLetters = 4
   let values    = ['0' .. '9']
