@@ -104,18 +104,15 @@ data GameConfig = GameConfig {
 nextTrial gs@(GameState t) = gs { trials = t - 1 }
 
 -- Print output of guess and return True if the game ended
-printOutputAndStop :: String -> String -> IO Bool
-printOutputAndStop secret "q" = return True
-printOutputAndStop secret guess = do
-  let won = secret == guess
-  if won
+printOutputAndStop :: String -> String -> IO ()
+printOutputAndStop secret guess = 
+  if secret == guess
     then putStrLn "You won !"
     else do
       let result = compute secret guess
       putStrLn $ "Good       : " ++ show (fst result)
       putStrLn $ "Almost good: " ++ show (snd result)
-  return won
-
+ 
 play :: ReaderT GameConfig (StateT GameState IO) ()
 play = do
   gc@(GameConfig values secret) <- ask
@@ -127,10 +124,9 @@ play = do
 
       cmd <- liftIO $ runReaderT getValidCmd (length secret, values)
 
-      stop <- liftIO $ printOutputAndStop secret cmd
-
-      unless stop $ do
+      unless (cmd == "q") $ do 
         modify nextTrial 
+        stop <- liftIO $ printOutputAndStop secret cmd
         play
         
 main :: IO ()
@@ -150,7 +146,7 @@ main = do
   putStrLn secret
 
   -- State of the game
-  let state = GameState nbTrials 
+  let state = GameState nbTrials
 
   -- Config of the game
   let config = GameConfig values secret
