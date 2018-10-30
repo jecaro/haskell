@@ -1,10 +1,11 @@
 copyright: 2018 Jean-Charles Quillet
 maintainer: jeancharles.quillet@gmail.com
 dependencies:
+- parsec
 - base >= 4.7 && < 5
 - mtl
 - random
-
+- ansi-terminal
 name: hsmaster
 version: 0.1.0.0
 extra-source-files:

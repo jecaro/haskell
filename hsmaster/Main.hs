@@ -2,13 +2,20 @@
 
 import           System.Random
 import           System.IO
+import           System.Console.ANSI
 import           Control.Monad
 import           Data.List
 import           Control.Monad.State
 import           Control.Monad.Reader
 
--- TODO 
--- clear screen and show stack of guess
+-- State of the game, a stack with the guesses
+newtype GameState = GameState{guesses :: [String]}
+
+-- Config of the game
+data GameConfig = GameConfig {
+  nbTrials :: Int,   -- Number of trials
+  values :: String,  -- Possible values for secret
+  secret :: String } -- Secret word
 
 -- Take a value at a specific index in a list
 -- return this value along the remaining list
@@ -20,11 +27,11 @@ pick list ind = (list !! ind, start ++ end)
 
 -- Shuffle a list 
 shuffle :: RandomGen g => [a] -> State g [a]
-shuffle [] = return []
+shuffle []   = return []
 shuffle list = do
-  ind <- state $ randomR (0, length list - 1) 
+  ind <- state $ randomR (0, length list - 1)
   let (val, list') = pick list ind
-  fmap (val:) (shuffle list') 
+  fmap (val :) (shuffle list')
 
 -- Compute the result of the guess
 compute :: Eq a => [a] -> [a] -> (Int, Int)
@@ -33,16 +40,17 @@ compute secret guess = (goodSpot, good - goodSpot)
   goodSpot = length . filter (uncurry (==)) $ zip secret guess
   good     = length $ filter (`elem` secret) guess
 
-hasRepeated :: (Eq a, Ord a) => [a] -> Bool
-hasRepeated w = any (\x -> length x >= 2) $ group $ sort w
+-- Check if a list contains duplicates elements
+hasDuplicate :: (Eq a, Ord a) => [a] -> Bool
+hasDuplicate w = any (\x -> length x >= 2) $ group $ sort w
 
 -- Recursive function to get the next command
 getNextCmd' :: StateT (Int, String) IO ()
 getNextCmd' = do
   -- Get the state
   (n, word) <- get
-  -- Where not finished
-  unless (n == 0) $ do 
+  -- We're not finished
+  unless (n == 0) $ do
     c <- liftIO getChar
     let word' = word ++ [c]
     -- Update state
@@ -53,7 +61,7 @@ getNextCmd' = do
 -- Get input of specific size or 'q' or ending with \n
 -- Int : max number of chars to read before stopping
 getNextCmd :: Int -> IO String
-getNextCmd n = do 
+getNextCmd n = do
   -- Start the recursive function
   s <- execStateT getNextCmd' (n, "")
   -- Get the word
@@ -71,64 +79,64 @@ endOfLineIfNeeded cmd = unless (endWidthN cmd) $ putStrLn ""
 -- - no repeated letters
 -- - correct values
 validCmd :: MonadReader (Int, String) m => String -> m Bool
-validCmd "q" = return True
+validCmd "q"   = return True
 validCmd guess = do
-   (n, values) <- ask
-   return $ (length guess == n) && not (hasRepeated guess) && all (`elem` values) guess
+  (n, values) <- ask
+  return
+    $  (length guess == n)
+    && not (hasDuplicate guess)
+    && all (`elem` values) guess
 
 -- Loop until it gets a valid command from prompt. It can be
 -- 'q' or any valid word
 getValidCmd :: ReaderT (Int, String) IO String
 getValidCmd = do
   (n, values) <- ask
-  cmd <- liftIO $ getNextCmd n
-  valid <- validCmd cmd
+  cmd         <- liftIO $ getNextCmd n
+  valid       <- validCmd cmd
   if valid
     then do
       liftIO $ endOfLineIfNeeded cmd
       return cmd
     else do
       let cmd' = if endWidthN cmd then init cmd else cmd
-      liftIO $ endOfLineIfNeeded cmd
-      liftIO $ putStrLn $ "Invalid input: " ++ cmd'
+      liftIO $ do
+        endOfLineIfNeeded cmd
+        cursorUp 1
+        putStrLn $ "Invalid input: " ++ cmd'
       getValidCmd
 
--- Number of remaining trials
-newtype GameState = GameState{trials :: Int} 
+-- Add guess in the state
+addGuess guess gs@(GameState g) = gs { guesses = g ++ [guess] }
 
-data GameConfig = GameConfig {
-  values :: String,  -- Possible values for secret
-  secret :: String } -- Secret word
+-- Print guesses stack - Add index of line
+printGuesses :: [String] -> String -> IO ()
+printGuesses guesses secret = do
+  clearScreen
+  forM_ guesses $ \guess -> do
+    let (g, w) = compute secret guess
+    putStrLn $ guess ++ "-" ++ show g ++ " " ++ show w
 
--- Decrement the number of trials
-nextTrial gs@(GameState t) = gs { trials = t - 1 }
-
--- Print output of guess and return True if the game ended
-printOutputAndStop :: String -> String -> IO ()
-printOutputAndStop secret guess = 
-  if secret == guess
-    then putStrLn "You won !"
-    else do
-      let result = compute secret guess
-      putStrLn $ "Good       : " ++ show (fst result)
-      putStrLn $ "Almost good: " ++ show (snd result)
- 
+-- Play loop
 play :: ReaderT GameConfig (StateT GameState IO) ()
 play = do
-  (GameConfig values secret) <- ask
-  (GameState trials) <- get 
-
-  if trials == 0 
+  (GameConfig nbTrials values secret) <- ask
+  (GameState guesses                ) <- get
+  if length guesses == nbTrials
     then liftIO $ putStrLn "You lose !"
     else do
 
       cmd <- liftIO $ runReaderT getValidCmd (length secret, values)
 
-      unless (cmd == "q") $ do 
-        modify nextTrial 
-        stop <- liftIO $ printOutputAndStop secret cmd
-        play
-        
+      unless (cmd == "q") $
+        if cmd == secret 
+          then liftIO $ putStrLn "You won !"
+          else do
+            modify (addGuess cmd)
+            (GameState guesses') <- get
+            liftIO $ printGuesses guesses' secret
+            play
+
 main :: IO ()
 main = do
 
@@ -138,18 +146,17 @@ main = do
   -- Game configuration
   let nbLetters = 4
   let values    = ['0' .. '9']
-  let nbTrials  = 3
+  let nbTrials  = 10
 
   -- Secret word to guess
   gen <- getStdGen
   let secret = take nbLetters $ evalState (shuffle values) gen
-  putStrLn secret
 
   -- State of the game
-  let state = GameState nbTrials
+  let state  = GameState []
 
   -- Config of the game
-  let config = GameConfig values secret
+  let config = GameConfig nbTrials values secret
 
   -- Lets play
   evalStateT (runReaderT play config) state
