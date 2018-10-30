@@ -94,22 +94,15 @@ validCmd guess = do
 
 -- Loop until it gets a valid command from prompt. It can be
 -- 'q' or any valid word
-getValidCmd :: ReaderT (Int, String) IO String
-getValidCmd = do
+getCmd :: ReaderT (Int, String) IO (Maybe String)
+getCmd = do
   (n, values) <- ask
   cmd         <- liftIO $ getNextCmd n
-  valid       <- validCmd cmd
+  liftIO $ endOfLineIfNeeded cmd
+  valid <- validCmd cmd
   if valid
-    then do
-      liftIO $ endOfLineIfNeeded cmd
-      return cmd
-    else do
-      let cmd' = if endWidthN cmd then init cmd else cmd
-      liftIO $ do
-        endOfLineIfNeeded cmd
-        cursorUp 1
-        putStrLn $ "Invalid input: " ++ cmd'
-      getValidCmd
+    then return $ Just cmd
+    else return Nothing
 
 -- Add guess in the state
 addGuess guess gs@(GameState g) = gs { guesses = g ++ [guess] }
@@ -118,31 +111,46 @@ addGuess guess gs@(GameState g) = gs { guesses = g ++ [guess] }
 printGuesses :: [String] -> String -> IO ()
 printGuesses guesses secret = do
   clearScreen
-  forM_ guesses $ \guess -> do
+  forM_ (zip [1..] guesses) $ \(i, guess) -> do
     let (g, w) = compute secret guess
-    putStrLn $ guess ++ "-" ++ show g ++ " " ++ show w
+    putStrLn $ show i ++ "-" ++ guess ++ "-" ++ show g ++ " " ++ show w
+
+data CurrentState = Won | Lost | Continue deriving (Eq)
 
 -- Play loop
 play :: ReaderT GameConfig (StateT GameState IO) ()
 play = do
   (GameConfig nbTrials values secret) <- ask
   (GameState guesses                ) <- get
+
+  -- Current state
+  let current | not (null guesses) && (last guesses == secret) = Won
+              | length guesses == nbTrials = Lost
+              | otherwise = Continue
+
+  -- Print game status
   liftIO $ do
     clearScreen
     printGuesses guesses secret
-    putStr "> " 
-  if length guesses == nbTrials
-    then liftIO $ putStrLn "You lose !"
-    else do
+    when (current == Continue) $ putStr "> "
 
-      cmd <- liftIO $ runReaderT getValidCmd (length secret, values)
+  case current of
+    -- Game is finished
+    Won -> liftIO $ putStrLn "You won !"
+    Lost -> liftIO $ putStrLn "You lose !"
+    -- Carry on
+    Continue -> do
+      -- Get next command
+      cmd <- liftIO $ runReaderT getCmd (length secret, values)
 
-      unless (cmd == "q") $
-        if cmd == secret 
-          then liftIO $ putStrLn "You won !"
-          else do
-            modify (addGuess cmd)
-            play
+      case cmd of
+        Nothing -> liftIO $ putStrLn "Invalid command"
+        Just "q" -> liftIO $ putStrLn "Ok bye"
+        Just cmd -> modify $ addGuess cmd
+       
+      unless (cmd == Just "q") play
+
+  
 
 main :: IO ()
 main = do
