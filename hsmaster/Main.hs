@@ -8,6 +8,11 @@ import           Data.List
 import           Control.Monad.State
 import           Control.Monad.Reader
 
+-- TODO
+-- get options from command line: nb trials, debug mode
+-- output index of stack
+-- handle prompt better (for invalid input)
+
 -- State of the game, a stack with the guesses
 newtype GameState = GameState{guesses :: [String]}
 
@@ -122,6 +127,10 @@ play :: ReaderT GameConfig (StateT GameState IO) ()
 play = do
   (GameConfig nbTrials values secret) <- ask
   (GameState guesses                ) <- get
+  liftIO $ do
+    clearScreen
+    printGuesses guesses secret
+    putStr "> " 
   if length guesses == nbTrials
     then liftIO $ putStrLn "You lose !"
     else do
@@ -133,8 +142,6 @@ play = do
           then liftIO $ putStrLn "You won !"
           else do
             modify (addGuess cmd)
-            (GameState guesses') <- get
-            liftIO $ printGuesses guesses' secret
             play
 
 main :: IO ()
@@ -146,7 +153,7 @@ main = do
   -- Game configuration
   let nbLetters = 4
   let values    = ['0' .. '9']
-  let nbTrials  = 10
+  let nbTrials  = 3
 
   -- Secret word to guess
   gen <- getStdGen
