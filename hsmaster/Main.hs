@@ -10,8 +10,8 @@ import           Control.Monad.Reader
 
 -- TODO
 -- get options from command line: nb trials, debug mode
--- output index of stack
--- handle prompt better (for invalid input)
+-- handle prompt better with clearScreen
+-- remove hard coded "q" 
 
 -- State of the game, a stack with the guesses
 newtype GameState = GameState{guesses :: [String]}
@@ -21,6 +21,9 @@ data GameConfig = GameConfig {
   nbTrials :: Int,   -- Number of trials
   values :: String,  -- Possible values for secret
   secret :: String } -- Secret word
+
+-- Status of the game
+data Status = Won | Lost | Continue deriving (Eq)
 
 -- Take a value at a specific index in a list
 -- return this value along the remaining list
@@ -67,17 +70,13 @@ getNextCmd' = do
 -- Int : max number of chars to read before stopping
 getNextCmd :: Int -> IO String
 getNextCmd n = do
+  putStr "> "
   -- Start the recursive function
-  s <- execStateT getNextCmd' (n, "")
+  (_, cmd) <- execStateT getNextCmd' (n, "")
+  -- Output '\n' if needed
+  unless (last cmd == '\n') $ putStrLn ""
   -- Get the word
-  return $ snd s
-
--- String ends with \n
-endWidthN cmd = last cmd == '\n'
-
--- Output \n if parameter do not end with it
-endOfLineIfNeeded :: String -> IO ()
-endOfLineIfNeeded cmd = unless (endWidthN cmd) $ putStrLn ""
+  return cmd
 
 -- Return the validity of the guess
 -- - the right length
@@ -94,28 +93,26 @@ validCmd guess = do
 
 -- Loop until it gets a valid command from prompt. It can be
 -- 'q' or any valid word
-getCmd :: ReaderT (Int, String) IO (Maybe String)
+getCmd :: ReaderT (Int, String) IO String
 getCmd = do
   (n, values) <- ask
+  liftIO saveCursor
   cmd         <- liftIO $ getNextCmd n
-  liftIO $ endOfLineIfNeeded cmd
-  valid <- validCmd cmd
-  if valid
-    then return $ Just cmd
-    else return Nothing
+  valid       <- validCmd cmd
+  if not valid 
+    then do 
+      liftIO $ putStrLn "Invalid command"
+      getCmd
+    else return cmd
 
 -- Add guess in the state
 addGuess guess gs@(GameState g) = gs { guesses = g ++ [guess] }
 
 -- Print guesses stack - Add index of line
 printGuesses :: [String] -> String -> IO ()
-printGuesses guesses secret = do
-  clearScreen
-  forM_ (zip [1..] guesses) $ \(i, guess) -> do
+printGuesses guesses secret = forM_ (zip [1..] guesses) $ \(i, guess) -> 
     let (g, w) = compute secret guess
-    putStrLn $ show i ++ "-" ++ guess ++ "-" ++ show g ++ " " ++ show w
-
-data CurrentState = Won | Lost | Continue deriving (Eq)
+    in putStrLn $ show i ++ "-" ++ guess ++ "-" ++ show g ++ " " ++ show w
 
 -- Play loop
 play :: ReaderT GameConfig (StateT GameState IO) ()
@@ -129,29 +126,27 @@ play = do
               | otherwise = Continue
 
   -- Print game status
-  liftIO $ do
-    clearScreen
-    printGuesses guesses secret
-    when (current == Continue) $ putStr "> "
+  liftIO $ printGuesses guesses secret
 
+  -- Branch in the game
   case current of
+
     -- Game is finished
     Won -> liftIO $ putStrLn "You won !"
     Lost -> liftIO $ putStrLn "You lose !"
+    
     -- Carry on
     Continue -> do
-      -- Get next command
+
       cmd <- liftIO $ runReaderT getCmd (length secret, values)
 
       case cmd of
-        Nothing -> liftIO $ putStrLn "Invalid command"
-        Just "q" -> liftIO $ putStrLn "Ok bye"
-        Just cmd -> modify $ addGuess cmd
+        "q" -> liftIO $ putStrLn "Ok bye"
+        _   -> modify $ addGuess cmd
        
-      unless (cmd == Just "q") play
+      unless (cmd == "q") play
 
   
-
 main :: IO ()
 main = do
 
