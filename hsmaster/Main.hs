@@ -150,11 +150,10 @@ play = do
 
       case cmd of
         Quit        -> liftIO $ putStrLn "Ok bye"
-        Guess guess -> modify $ addGuess guess
-       
-      unless (cmd == Quit) play
-
-  
+        Guess guess -> do
+          modify $ addGuess guess
+          play
+         
 main :: IO ()
 main = do
 
