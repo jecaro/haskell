@@ -11,7 +11,6 @@ import           Control.Monad.Reader
 -- TODO
 -- get options from command line: nb trials, debug mode
 -- handle prompt better with clearScreen
--- remove hard coded "q" 
 
 -- State of the game, a stack with the guesses
 newtype GameState = GameState{guesses :: [String]}
@@ -24,6 +23,9 @@ data GameConfig = GameConfig {
 
 -- Status of the game
 data Status = Won | Lost | Continue deriving (Eq)
+
+-- Commands handled in the game
+data Command = Quit | Guess String deriving (Eq)
 
 -- Take a value at a specific index in a list
 -- return this value along the remaining list
@@ -52,6 +54,8 @@ compute secret guess = (goodSpot, good - goodSpot)
 hasDuplicate :: (Eq a, Ord a) => [a] -> Bool
 hasDuplicate w = any (\x -> length x >= 2) $ group $ sort w
 
+isQuitCmd c = c == "q"
+
 -- Recursive function to get the next command
 getNextCmd' :: StateT (Int, String) IO ()
 getNextCmd' = do
@@ -64,7 +68,7 @@ getNextCmd' = do
     -- Update state
     put (n - 1, word')
     -- Go recursive
-    unless (c == 'q' || c == '\n') getNextCmd'
+    unless (isQuitCmd word' || c == '\n') getNextCmd'
 
 -- Get input of specific size or 'q' or ending with \n
 -- Int : max number of chars to read before stopping
@@ -83,17 +87,19 @@ getNextCmd n = do
 -- - no repeated letters
 -- - correct values
 validCmd :: MonadReader (Int, String) m => String -> m Bool
-validCmd "q"   = return True
-validCmd guess = do
-  (n, values) <- ask
-  return
-    $  (length guess == n)
-    && not (hasDuplicate guess)
-    && all (`elem` values) guess
+validCmd guess 
+    | isQuitCmd guess = return True
+    | otherwise = do 
+      (n, values) <- ask
+      return
+        $  (length guess == n)
+        && not (hasDuplicate guess)
+        && all (`elem` values) guess
 
--- Loop until it gets a valid command from prompt. It can be
--- 'q' or any valid word
-getCmd :: ReaderT (Int, String) IO String
+-- Loop until it gets a valid command from prompt:
+-- - a quit command
+-- - a valid guess
+getCmd :: ReaderT (Int, String) IO Command
 getCmd = do
   (n, values) <- ask
   liftIO saveCursor
@@ -103,7 +109,9 @@ getCmd = do
     then do 
       liftIO $ putStrLn "Invalid command"
       getCmd
-    else return cmd
+    else if isQuitCmd cmd
+      then return Quit
+      else return $ Guess cmd
 
 -- Add guess in the state
 addGuess guess gs@(GameState g) = gs { guesses = g ++ [guess] }
@@ -141,10 +149,10 @@ play = do
       cmd <- liftIO $ runReaderT getCmd (length secret, values)
 
       case cmd of
-        "q" -> liftIO $ putStrLn "Ok bye"
-        _   -> modify $ addGuess cmd
+        Quit        -> liftIO $ putStrLn "Ok bye"
+        Guess guess -> modify $ addGuess guess
        
-      unless (cmd == "q") play
+      unless (cmd == Quit) play
 
   
 main :: IO ()
