@@ -10,10 +10,7 @@ import           System.Console.ANSI
 import           System.Environment
 import           System.IO
 import           System.Random
-import qualified Text.Read as TR
-
--- TODO
--- handle prompt better with clearScreen
+import qualified Text.Read                     as TR
 
 -- State of the game, a stack with the guesses
 newtype GameState = GameState{guesses :: [String]}
@@ -34,9 +31,9 @@ data Command = Quit | Guess String deriving (Eq)
 -- return this value along the remaining list
 pick :: [a] -> Int -> (a, [a])
 pick list ind = (list !! ind, start ++ end)
-  where
-    start = take ind list
-    end   = drop (succ ind) list
+ where
+  start = take ind list
+  end   = drop (succ ind) list
 
 -- Shuffle a list 
 shuffle :: RandomGen g => [a] -> State g [a]
@@ -83,6 +80,7 @@ getNextCmd n = do
   (_, cmd) <- execStateT getNextCmd' (n, "")
   -- Output '\n' if needed
   unless (last cmd == '\n') $ putStrLn ""
+  clearFromCursorToLineEnd
   -- Get the word
   return cmd
 
@@ -91,14 +89,14 @@ getNextCmd n = do
 -- - no repeated letters
 -- - correct values
 validCmd :: MonadReader (Int, String) m => String -> m Bool
-validCmd guess 
-    | isQuitCmd guess = return True
-    | otherwise = do 
-      (n, values) <- ask
-      return
-        $  (length guess == n)
-        && not (hasDuplicate guess)
-        && all (`elem` values) guess
+validCmd guess
+  | isQuitCmd guess = return True
+  | otherwise = do
+    (n, values) <- ask
+    return
+      $  (length guess == n)
+      && not (hasDuplicate guess)
+      && all (`elem` values) guess
 
 -- Loop until it gets a valid command from prompt. It can be:
 -- - a quit command
@@ -106,25 +104,25 @@ validCmd guess
 getCmd :: ReaderT (Int, String) IO Command
 getCmd = do
   (n, values) <- ask
-  liftIO saveCursor
   cmd         <- liftIO $ getNextCmd n
   valid       <- validCmd cmd
-  if not valid 
-    then do 
-      liftIO $ putStrLn "Invalid command"
+  if not valid
+    then do
+      liftIO $ do
+        putStr "Invalid command"
+        cursorUpLine 1
+        clearFromCursorToLineEnd
       getCmd
-    else if isQuitCmd cmd
-      then return Quit
-      else return $ Guess cmd
+    else if isQuitCmd cmd then return Quit else return $ Guess cmd
 
 -- Add guess in the state
 addGuess guess gs@(GameState g) = gs { guesses = g ++ [guess] }
 
 -- Print guesses stack
 printGuesses :: [String] -> String -> IO ()
-printGuesses guesses secret = forM_ (zip [1..] guesses) $ \(i, guess) -> 
-    let (g, w) = compute secret guess
-    in putStrLn $ show i ++ "-" ++ guess ++ "-" ++ show g ++ " " ++ show w
+printGuesses guesses secret = forM_ (zip [1 ..] guesses) $ \(i, guess) ->
+  let (g, w) = compute secret guess
+  in  putStrLn $ show i ++ "-" ++ guess ++ "-" ++ show g ++ " " ++ show w
 
 -- Play loop
 play :: ReaderT GameConfig (StateT GameState IO) ()
@@ -135,18 +133,20 @@ play = do
   -- Current state
   let current | not (null guesses) && (last guesses == secret) = Won
               | length guesses == nbTrials = Lost
-              | otherwise = Continue
+              | otherwise                  = Continue
 
   -- Print game status
-  liftIO $ printGuesses guesses secret
+  liftIO $ do
+    clearScreen
+    printGuesses guesses secret
 
   -- Branch in the game
   case current of
 
     -- Game is finished
-    Won  -> liftIO $ putStrLn "You won !"
-    Lost -> liftIO $ putStrLn "You lose !"
-    
+    Won      -> liftIO $ putStrLn "You won !"
+    Lost     -> liftIO $ putStrLn "You lose !"
+
     -- Carry on
     Continue -> do
 
@@ -160,24 +160,25 @@ play = do
 
 -- Get the number of trials from arg list
 getNbTrials :: [String] -> Maybe Int
-getNbTrials args = do 
+getNbTrials args = do
   ind <- "-n" `elemIndex` args
-  el <- atMay args $ succ ind
+  el  <- atMay args $ succ ind
   TR.readMaybe el
-                  
+
 -- Check the validity of the arg list
 checkArgs :: [String] -> Bool
-checkArgs ("-n":x:xs) = isJust (TR.readMaybe x :: Maybe Int) && checkArgs xs
-checkArgs (x:xs) = (x == "-d" || x == "-h") && checkArgs xs
-checkArgs [] = True
+checkArgs ("-n" : x : xs) =
+  isJust (TR.readMaybe x :: Maybe Int) && checkArgs xs
+checkArgs (x : xs) = (x == "-d" || x == "-h") && checkArgs xs
+checkArgs []       = True
 
 -- Print simple usage
 usage :: IO ()
 usage = do
   progName <- getProgName
-  putStrLn $ progName ++ ": [-d] [-n 10]" 
-  putStrLn "-d\tDebug mode" 
-  putStrLn "-n 10\tSet the number of trials (default 10)" 
+  putStrLn $ progName ++ ": [-d] [-n 10]"
+  putStrLn "-d\tDebug mode"
+  putStrLn "-n 10\tSet the number of trials (default 10)"
 
 -- Main function
 main :: IO ()
@@ -192,8 +193,8 @@ main = do
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      let debug = "-d" `elem` args
-      let nbTrials = fromMaybe 10 $ getNbTrials args
+      let debug     = "-d" `elem` args
+      let nbTrials  = fromMaybe 10 $ getNbTrials args
 
       -- Game configuration
       let nbLetters = 4
