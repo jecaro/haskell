@@ -1,4 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE RankNTypes #-}
 
 import           Control.Monad
 import           Control.Monad.State
@@ -10,22 +13,61 @@ import           System.Console.ANSI
 import           System.Environment
 import           System.IO
 import           System.Random
-import qualified Text.Read                     as TR
+import qualified Text.Read as TR
 
--- State of the game, a stack with the guesses
-newtype GameState = GameState{guesses :: [String]}
+import Lens.Micro
+import Lens.Micro.TH
+import qualified Graphics.Vty as V
 
--- Config of the game
-data GameConfig = GameConfig {
-  nbTrials :: Int,   -- Number of trials
-  values :: String,  -- Possible values for secret
-  secret :: String } -- Secret word
+import qualified Brick.Main as M
+import qualified Brick.Types as T
+import Brick.Widgets.Core
+  ( (<+>)
+  , (<=>)
+  , hLimit
+  , vLimit
+  , str
+  , vBox
+  , hBox
+  , padAll
+  , padLeft
+  , padRight
+  , padTop
+  , padBottom
+  , padTopBottom
+  , padLeftRight
+  )
+import qualified Brick.Widgets.Center as C
+import qualified Brick.Widgets.Border as B
+import qualified Brick.Widgets.Edit as E
+import qualified Brick.AttrMap as A
+import qualified Brick.Focus as F
+import Brick.Util (on)
+
+import qualified Data.Text.Zipper as Z
+import Control.Arrow ( (>>>) )
+
+-- TODO 
+-- add a message end of game
+-- sort import
+-- rename finished eog
+-- remove attrMap
+-- try to add reader monad again
+-- better lens
+
+data Name = Prompt
+          deriving (Ord, Show, Eq)
+
+data St = St {
+  _editor   :: E.Editor String Name,
+  _guesses  :: [String],
+  _nbTrials :: Int,
+  _values   :: String,
+  _secret   :: String  } deriving (Show)
+makeLenses ''St
 
 -- Status of the game
 data Status = Won | Lost | Continue deriving (Eq)
-
--- Commands handled in the game
-data Command = Quit | Guess String deriving (Eq)
 
 -- Take a value at a specific index in a list
 -- return this value along the remaining list
@@ -54,109 +96,14 @@ compute secret guess = (goodSpot, good - goodSpot)
 hasDuplicate :: (Eq a, Ord a) => [a] -> Bool
 hasDuplicate w = any (\x -> length x >= 2) $ group $ sort w
 
--- Quit command
-isQuitCmd c = c == "q"
-
--- Recursive function to get the next command
-getNextCmd' :: StateT (Int, String) IO ()
-getNextCmd' = do
-  -- Get the state
-  (n, word) <- get
-  -- We're not finished
-  unless (n == 0) $ do
-    c <- liftIO getChar
-    let word' = word ++ [c]
-    -- Update state
-    put (n - 1, word')
-    -- Go recursive
-    unless (isQuitCmd word' || c == '\n') getNextCmd'
-
--- Get input of specific size or quit or ending with \n
--- Int : max number of chars to read before stopping
-getNextCmd :: Int -> IO String
-getNextCmd n = do
-  putStr "> "
-  -- Start the recursive function
-  (_, cmd) <- execStateT getNextCmd' (n, "")
-  -- Output '\n' if needed
-  unless (last cmd == '\n') $ putStrLn ""
-  clearFromCursorToLineEnd
-  -- Get the word
-  return cmd
-
 -- Return the validity of the guess
 -- - the right length
 -- - no repeated letters
 -- - correct values
-validCmd :: MonadReader (Int, String) m => String -> m Bool
-validCmd guess
-  | isQuitCmd guess = return True
-  | otherwise = do
-    (n, values) <- ask
-    return
-      $  (length guess == n)
-      && not (hasDuplicate guess)
-      && all (`elem` values) guess
-
--- Loop until it gets a valid command from prompt. It can be:
--- - a quit command
--- - a valid guess
-getCmd :: ReaderT (Int, String) IO Command
-getCmd = do
-  (n, values) <- ask
-  cmd         <- liftIO $ getNextCmd n
-  valid       <- validCmd cmd
-  if not valid
-    then do
-      liftIO $ do
-        putStr "Invalid command"
-        cursorUpLine 1
-        clearFromCursorToLineEnd
-      getCmd
-    else if isQuitCmd cmd then return Quit else return $ Guess cmd
-
--- Add guess in the state
-addGuess guess gs@(GameState g) = gs { guesses = g ++ [guess] }
-
--- Print guesses stack
-printGuesses :: [String] -> String -> IO ()
-printGuesses guesses secret = forM_ (zip [1 ..] guesses) $ \(i, guess) ->
-  let (g, w) = compute secret guess
-  in  putStrLn $ show i ++ "-" ++ guess ++ "-" ++ show g ++ " " ++ show w
-
--- Play loop
-play :: ReaderT GameConfig (StateT GameState IO) ()
-play = do
-  (GameConfig nbTrials values secret) <- ask
-  (GameState guesses                ) <- get
-
-  -- Current state
-  let current | not (null guesses) && (last guesses == secret) = Won
-              | length guesses == nbTrials = Lost
-              | otherwise                  = Continue
-
-  -- Print game status
-  liftIO $ do
-    clearScreen
-    printGuesses guesses secret
-
-  -- Branch in the game
-  case current of
-
-    -- Game is finished
-    Won      -> liftIO $ putStrLn "You won !"
-    Lost     -> liftIO $ putStrLn "You lose !"
-
-    -- Carry on
-    Continue -> do
-
-      cmd <- liftIO $ runReaderT getCmd (length secret, values)
-
-      case cmd of
-        Quit        -> liftIO $ putStrLn "Ok bye"
-        Guess guess -> do
-          modify $ addGuess guess
-          play
+validPartialGuess :: Int -> String -> String -> Bool
+validPartialGuess n values guess = (length guess <= n)
+  && not (hasDuplicate guess)
+  && all (`elem` values) guess
 
 -- Get the number of trials from arg list
 getNbTrials :: [String] -> Maybe Int
@@ -180,35 +127,104 @@ usage = do
   putStrLn "-d\tDebug mode"
   putStrLn "-n 10\tSet the number of trials (default 10)"
 
+showStl :: String -> String -> String
+showStl secret "" = "   "
+showStl secret guess = show f ++ " " ++ show s 
+  where (f, s) = compute secret guess
+
+-- Rendering function
+drawUI :: St -> [T.Widget Name]
+drawUI st = [ui]
+ where
+  e        = E.renderEditor (str . unlines) True (st ^. editor)
+  guesses' = reverse $ take (st^.nbTrials) $ st ^. guesses ++ repeat ""
+  fstCol   = map (intersperse ' ') guesses'
+  slt      = map (showStl (st ^. secret)) guesses'
+  ui       = C.center $ hLimit 25 $ B.border $ vBox
+    [ hBox
+      [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
+      , vLimit (st^.nbTrials) B.vBorder
+      , padLeftRight 2 $ str $ unlines slt
+      ]
+    , B.hBorder
+    , str "> " <+> e
+    ]
+
+finished :: St -> Bool
+finished st 
+  -- no guesses
+  | null $ st ^. guesses = False
+  -- win
+  | last (st ^. guesses) == (st ^. secret) = True
+  -- loose
+  | length (st ^. guesses) == (st ^. nbTrials) = True
+  -- anything else
+  | otherwise = False
+
+-- Event handler
+appEvent :: St -> T.BrickEvent Name e -> T.EventM Name (T.Next St)
+appEvent st (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt st
+appEvent st (T.VtyEvent ev                 ) = 
+  if finished st 
+    then M.halt st
+    else do
+      -- The new editor with event handled
+      newEditor <- E.handleEditorEvent ev (st ^. editor)
+      -- Its content
+      let guess = unwords $ E.getEditContents newEditor
+      -- We check the validity of the typed guess
+      if not $ validPartialGuess (length $ st ^. secret) (st ^. values) guess
+        then M.continue st
+        else
+          -- Its length is still wrong
+          if length guess < length (st ^. secret)
+          then M.continue $ st & editor .~ newEditor
+          else
+            M.continue
+            $  st
+            &  editor .~ E.applyEdit Z.clearZipper (st ^. editor)
+            &  guesses .~ ((st ^. guesses) ++ [guess])
+
+appEvent st _ = M.continue st
+
+-- Initial state
+defaultState :: St
+defaultState = St { _editor = E.editor Prompt (Just 1) ""
+                  , _guesses = []
+                  , _nbTrials = 3
+                  , _values = ['0'..'9']
+                  , _secret = "1324" } 
+
+-- Default attribute map 
+theMap :: A.AttrMap
+theMap = A.attrMap V.defAttr []
+
+-- Main record for the brick application
+theApp :: M.App St e Name
+theApp =
+    M.App { M.appDraw         = drawUI
+          , M.appChooseCursor = M.showFirstCursor
+          , M.appHandleEvent  = appEvent
+          , M.appStartEvent   = return
+          , M.appAttrMap      = const theMap
+          }
+
 -- Main function
 main :: IO ()
 main = do
-
-  -- No buffering mode on stdio
-  hSetBuffering stdin NoBuffering
-
   -- Arguments initialization
-  args <- getArgs
-
+  args <- getArgs 
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
       let debug     = "-d" `elem` args
-      let nbTrials  = fromMaybe 10 $ getNbTrials args
-
+      let nbTrials'  = fromMaybe 10 $ getNbTrials args 
       -- Game configuration
       let nbLetters = 4
-      let values    = ['0' .. '9']
-
       -- Secret word to guess
       gen <- getStdGen
-      let secret = take nbLetters $ evalState (shuffle values) gen
-
+      let secret' = take nbLetters $ evalState (shuffle $ defaultState^.values) gen 
       -- Show secret word in debug mode
-      when debug $ putStrLn secret
-
-      -- Config of the game
-      let config = GameConfig nbTrials values secret
-
-      -- Lets play
-      evalStateT (runReaderT play config) $ GameState []
+      when debug $ putStrLn secret' >> void getChar
+      let initialState = defaultState & nbTrials .~ nbTrials' & secret .~ secret'
+      void $ M.defaultMain theApp initialState

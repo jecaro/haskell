@@ -1,6 +1,12 @@
 copyright: 2018 Jean-Charles Quillet
 maintainer: jeancharles.quillet@gmail.com
 dependencies:
+- text-zipper
+- text
+- microlens-th
+- microlens
+- vty
+- brick
 - base >= 4.7 && < 5
 - mtl
 - random
