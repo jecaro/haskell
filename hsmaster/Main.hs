@@ -30,8 +30,9 @@ import qualified Data.Text.Zipper              as Z
 import           Control.Arrow                            ( (>>>) )
 
 -- TODO 
--- add a message end of game
 -- try to add reader monad again
+-- add secret key to get the secret
+-- refactor event loop
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
@@ -128,40 +129,50 @@ drawUI st = [ui]
     , str "> " <+> e
     ]
 
-endOfGame :: St -> Bool
-endOfGame st 
+gameStatus :: St -> Status
+gameStatus st 
   -- no guesses
-  | null $ st ^. guesses = False
+  | null $ st ^. guesses = Continue
   -- win
-  | last (st ^. guesses) == (st ^. secret) = True
+  | head (st ^. guesses) == (st ^. secret) = Won
   -- loose
-  | length (st ^. guesses) == (st ^. nbTrials) = True
+  | length (st ^. guesses) == (st ^. nbTrials) = Lost
   -- anything else
-  | otherwise = False
+  | otherwise = Continue
+
+endMsg :: Status -> Maybe String
+endMsg Won  = Just "You won !"
+endMsg Lost = Just "You loose !"
+endMsg _    = Nothing
+
+showMsg :: Monoid a => String -> Z.TextZipper a -> Z.TextZipper a
+showMsg msg = foldl (>>>) Z.clearZipper $ map Z.insertChar msg
 
 -- Event handler
 appEvent :: St -> T.BrickEvent Name e -> T.EventM Name (T.Next St)
 appEvent st (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt st
 appEvent st (T.VtyEvent ev                 ) = 
-  if endOfGame st 
+  if gameStatus st /= Continue 
     then M.halt st
     else do
       -- The new editor with event handled
-      newEditor <- E.handleEditorEvent ev (st ^. editor)
+      editor' <- E.handleEditorEvent ev (st ^. editor)
       -- Its content
-      let guess = unwords $ E.getEditContents newEditor
+      let guess = unwords $ E.getEditContents editor'
       -- We check the validity of the typed guess
       if not $ validPartialGuess (length $ st ^. secret) (st ^. values) guess
         then M.continue st
         else
           -- Its length is still wrong
           if length guess < length (st ^. secret)
-          then M.continue $ st & editor .~ newEditor
-          else 
+          then M.continue $ st & editor .~ editor'
+          else do
+            let st' = st & guesses %~ (guess:)
+            let editor'' = case endMsg (gameStatus st') of Nothing  -> Z.clearZipper
+                                                           Just msg -> showMsg msg
             M.continue
-            $  st
-            &  editor %~ E.applyEdit Z.clearZipper 
-            &  guesses %~ (guess:)
+              $  st'
+              &  editor %~ E.applyEdit editor''
 
 appEvent st _ = M.continue st
 
@@ -171,7 +182,7 @@ defaultState = St { _editor = E.editor Prompt (Just 1) ""
                   , _guesses = []
                   , _nbTrials = 3
                   , _values = ['0'..'9']
-                  , _secret = "1324" } 
+                  , _secret = "1234" } 
 
 -- Main record for the brick application
 theApp :: M.App St e Name
