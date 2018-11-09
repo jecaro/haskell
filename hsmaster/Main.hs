@@ -5,7 +5,6 @@
 
 import           Control.Monad
 import           Control.Monad.State
-import           Control.Monad.Reader
 import           Data.List
 import           Data.Maybe
 import           Safe
@@ -13,44 +12,25 @@ import           System.Console.ANSI
 import           System.Environment
 import           System.IO
 import           System.Random
-import qualified Text.Read as TR
+import qualified Text.Read                     as TR
 
-import Lens.Micro
-import Lens.Micro.TH
-import qualified Graphics.Vty as V
+import           Lens.Micro
+import           Lens.Micro.TH
+import qualified Graphics.Vty                  as V
 
-import qualified Brick.Main as M
-import qualified Brick.Types as T
-import Brick.Widgets.Core
-  ( (<+>)
-  , (<=>)
-  , hLimit
-  , vLimit
-  , str
-  , vBox
-  , hBox
-  , padAll
-  , padLeft
-  , padRight
-  , padTop
-  , padBottom
-  , padTopBottom
-  , padLeftRight
-  )
-import qualified Brick.Widgets.Center as C
-import qualified Brick.Widgets.Border as B
-import qualified Brick.Widgets.Edit as E
-import qualified Brick.AttrMap as A
-import qualified Brick.Focus as F
-import Brick.Util (on)
+import qualified Brick.Main                    as M
+import qualified Brick.Types                   as T
+import           Brick.Widgets.Core
+import qualified Brick.Widgets.Center          as C
+import qualified Brick.Widgets.Border          as B
+import qualified Brick.Widgets.Edit            as E
+import qualified Brick.AttrMap                 as A
 
-import qualified Data.Text.Zipper as Z
-import Control.Arrow ( (>>>) )
+import qualified Data.Text.Zipper              as Z
+import           Control.Arrow                            ( (>>>) )
 
 -- TODO 
 -- add a message end of game
--- sort import
--- rename finished eog
 -- try to add reader monad again
 
 data Name = Prompt
@@ -148,8 +128,8 @@ drawUI st = [ui]
     , str "> " <+> e
     ]
 
-finished :: St -> Bool
-finished st 
+endOfGame :: St -> Bool
+endOfGame st 
   -- no guesses
   | null $ st ^. guesses = False
   -- win
@@ -163,7 +143,7 @@ finished st
 appEvent :: St -> T.BrickEvent Name e -> T.EventM Name (T.Next St)
 appEvent st (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt st
 appEvent st (T.VtyEvent ev                 ) = 
-  if finished st 
+  if endOfGame st 
     then M.halt st
     else do
       -- The new editor with event handled
@@ -177,7 +157,7 @@ appEvent st (T.VtyEvent ev                 ) =
           -- Its length is still wrong
           if length guess < length (st ^. secret)
           then M.continue $ st & editor .~ newEditor
-          else
+          else 
             M.continue
             $  st
             &  editor %~ E.applyEdit Z.clearZipper 
