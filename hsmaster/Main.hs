@@ -51,7 +51,6 @@ import Control.Arrow ( (>>>) )
 -- add a message end of game
 -- sort import
 -- rename finished eog
--- remove attrMap
 -- try to add reader monad again
 
 data Name = Prompt
@@ -194,10 +193,6 @@ defaultState = St { _editor = E.editor Prompt (Just 1) ""
                   , _values = ['0'..'9']
                   , _secret = "1324" } 
 
--- Default attribute map 
-theMap :: A.AttrMap
-theMap = A.attrMap V.defAttr []
-
 -- Main record for the brick application
 theApp :: M.App St e Name
 theApp =
@@ -205,7 +200,7 @@ theApp =
           , M.appChooseCursor = M.showFirstCursor
           , M.appHandleEvent  = appEvent
           , M.appStartEvent   = return
-          , M.appAttrMap      = const theMap
+          , M.appAttrMap      = const $ A.attrMap V.defAttr [] 
           }
 
 -- Main function
