@@ -53,7 +53,6 @@ import Control.Arrow ( (>>>) )
 -- rename finished eog
 -- remove attrMap
 -- try to add reader monad again
--- better lens
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
@@ -182,8 +181,8 @@ appEvent st (T.VtyEvent ev                 ) =
           else
             M.continue
             $  st
-            &  editor .~ E.applyEdit Z.clearZipper (st ^. editor)
-            &  guesses .~ ((st ^. guesses) ++ [guess])
+            &  editor %~ E.applyEdit Z.clearZipper 
+            &  guesses %~ (guess:)
 
 appEvent st _ = M.continue st
 
