@@ -31,7 +31,6 @@ import           Control.Arrow                            ( (>>>) )
 
 -- TODO 
 -- try to add reader monad again
--- add secret key to get the secret
 -- refactor event loop
 
 data Name = Prompt
@@ -95,15 +94,14 @@ getNbTrials args = do
 checkArgs :: [String] -> Bool
 checkArgs ("-n" : x : xs) =
   isJust (TR.readMaybe x :: Maybe Int) && checkArgs xs
-checkArgs (x : xs) = (x == "-d" || x == "-h") && checkArgs xs
+checkArgs (x : xs) = x == "-h" && checkArgs xs
 checkArgs []       = True
 
 -- Print simple usage
 usage :: IO ()
 usage = do
   progName <- getProgName
-  putStrLn $ progName ++ ": [-d] [-n 10]"
-  putStrLn "-d\tDebug mode"
+  putStrLn $ progName ++ ": [-n 10]"
   putStrLn "-n 10\tSet the number of trials (default 10)"
 
 showStl :: String -> String -> String
@@ -150,29 +148,32 @@ showMsg msg = foldl (>>>) Z.clearZipper $ map Z.insertChar msg
 
 -- Event handler
 appEvent :: St -> T.BrickEvent Name e -> T.EventM Name (T.Next St)
+-- Quit the game
 appEvent st (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt st
-appEvent st (T.VtyEvent ev                 ) = 
-  if gameStatus st /= Continue 
-    then M.halt st
-    else do
-      -- The new editor with event handled
-      editor' <- E.handleEditorEvent ev (st ^. editor)
-      -- Its content
-      let guess = unwords $ E.getEditContents editor'
-      -- We check the validity of the typed guess
-      if not $ validPartialGuess (length $ st ^. secret) (st ^. values) guess
-        then M.continue st
-        else
-          -- Its length is still wrong
-          if length guess < length (st ^. secret)
-          then M.continue $ st & editor .~ editor'
-          else do
-            let st' = st & guesses %~ (guess:)
-            let editor'' = case endMsg (gameStatus st') of Nothing  -> Z.clearZipper
-                                                           Just msg -> showMsg msg
-            M.continue
-              $  st'
-              &  editor %~ E.applyEdit editor''
+-- Cheat mode, press h to show the secret number
+appEvent st (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
+  M.continue $ st & editor %~ E.applyEdit (showMsg (st ^. secret))
+-- Main event handler
+appEvent st (T.VtyEvent ev) = if gameStatus st /= Continue
+  then M.halt st
+  else do
+    -- The new editor with event handled
+    editor' <- E.handleEditorEvent ev (st ^. editor)
+    -- Its content
+    let guess = unwords $ E.getEditContents editor'
+    -- We check the validity of the typed guess
+    if not $ validPartialGuess (length $ st ^. secret) (st ^. values) guess
+      then M.continue st
+      else
+        -- Its length is still wrong
+           if length guess < length (st ^. secret)
+        then M.continue $ st & editor .~ editor'
+        else do
+          let st' = st & guesses %~ (guess :)
+          let editor'' = case endMsg (gameStatus st') of
+                Nothing  -> Z.clearZipper
+                Just msg -> showMsg msg
+          M.continue $ st' & editor %~ E.applyEdit editor''
 
 appEvent st _ = M.continue st
 
@@ -202,14 +203,11 @@ main = do
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      let debug     = "-d" `elem` args
       let nbTrials'  = fromMaybe 10 $ getNbTrials args 
       -- Game configuration
       let nbLetters = 4
       -- Secret word to guess
       gen <- getStdGen
       let secret' = take nbLetters $ evalState (shuffle $ defaultState^.values) gen 
-      -- Show secret word in debug mode
-      when debug $ putStrLn secret' >> void getChar
       let initialState = defaultState & nbTrials .~ nbTrials' & secret .~ secret'
       void $ M.defaultMain theApp initialState
