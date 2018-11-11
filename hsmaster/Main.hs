@@ -31,7 +31,6 @@ import           Control.Arrow                            ( (>>>) )
 
 -- TODO 
 -- try to add reader monad again
--- refactor event loop
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
@@ -104,9 +103,10 @@ usage = do
   putStrLn $ progName ++ ": [-n 10]"
   putStrLn "-n 10\tSet the number of trials (default 10)"
 
-showStl :: String -> String -> String
-showStl secret "" = "   "
-showStl secret guess = show f ++ " " ++ show s 
+-- Show the hint for a word
+showHint :: String -> String -> String
+showHint secret "" = "   "
+showHint secret guess = show f ++ " " ++ show s 
   where (f, s) = compute secret guess
 
 -- Rendering function
@@ -116,12 +116,12 @@ drawUI st = [ui]
   e        = E.renderEditor (str . unlines) True (st ^. editor)
   guesses' = reverse $ take (st^.nbTrials) $ st ^. guesses ++ repeat ""
   fstCol   = map (intersperse ' ') guesses'
-  slt      = map (showStl (st ^. secret)) guesses'
+  hint     = map (showHint (st ^. secret)) guesses'
   ui       = C.center $ hLimit 25 $ B.border $ vBox
     [ hBox
       [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
       , vLimit (st^.nbTrials) B.vBorder
-      , padLeftRight 2 $ str $ unlines slt
+      , padLeftRight 2 $ str $ unlines hint
       ]
     , B.hBorder
     , str "> " <+> e
@@ -138,11 +138,13 @@ gameStatus st
   -- anything else
   | otherwise = Continue
 
+-- End of game message
 endMsg :: Status -> Maybe String
 endMsg Won  = Just "You won !"
 endMsg Lost = Just "You loose !"
 endMsg _    = Nothing
 
+-- Edit a zipper to write a message
 showMsg :: Monoid a => String -> Z.TextZipper a -> Z.TextZipper a
 showMsg msg = foldl (>>>) Z.clearZipper $ map Z.insertChar msg
 
@@ -166,13 +168,16 @@ appEvent st (T.VtyEvent ev) = if gameStatus st /= Continue
       then M.continue st
       else
         -- Its length is still wrong
-           if length guess < length (st ^. secret)
+        if length guess < length (st ^. secret)
         then M.continue $ st & editor .~ editor'
         else do
+          -- Append guess to stack of guesses
           let st' = st & guesses %~ (guess :)
+          -- Show the message if needed
           let editor'' = case endMsg (gameStatus st') of
                 Nothing  -> Z.clearZipper
                 Just msg -> showMsg msg
+          -- Carry on
           M.continue $ st' & editor %~ E.applyEdit editor''
 
 appEvent st _ = M.continue st
