@@ -36,19 +36,6 @@ data Name = Prompt
 
 type Game = G.Game (E.Editor String Name)
 
--- Check if a list contains duplicates elements
-hasDuplicate :: (Eq a, Ord a) => [a] -> Bool
-hasDuplicate w = any (\x -> length x >= 2) $ group $ sort w
-
--- Return the validity of the guess
--- - the right length
--- - no repeated letters
--- - correct values
-validPartialGuess :: Int -> String -> String -> Bool
-validPartialGuess n values guess = (length guess <= n)
-  && not (hasDuplicate guess)
-  && all (`elem` values) guess
-
 -- Get the number of trials from arg list
 getNbTrials :: [String] -> Maybe Int
 getNbTrials args = do
@@ -120,11 +107,11 @@ appEvent game (T.VtyEvent ev) = if G.status game /= G.Continue
     -- Its content
     let guess = unwords $ E.getEditContents editor'
     -- We check the validity of the typed guess
-    if not $ validPartialGuess (length $ G.secret game) (G.values game) guess
+    if not $ G.validPartialGuess game guess
       then M.continue game
       else
         -- Its length is still wrong
-        if length guess < length (G.secret game)
+        if not $ G.validGuess game guess
         then M.continue $ G.setEditor game editor'
         else do
           -- Append guess to stack of guesses

@@ -1,27 +1,29 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Game (
-  Game,
-  Status(..),
-  -- Fonctions
-  initGame,
-  draw,
-  status,
-  compute,
-  -- getters
-  editor,
-  nbTrials,
-  secret,
-  guesses,
-  values,
-  -- setters
-  setEditor,
-  applyEditor,
-  addGuess
-)
+module Game
+  ( Game
+  , Status(..)
+  -- Functions
+  , createGame
+  , draw
+  , status
+  , compute
+  , validPartialGuess
+  , validGuess
+  -- Getters
+  , editor
+  , nbTrials
+  , secret
+  , guesses
+  -- Setters
+  , setEditor
+  , applyEditor
+  , addGuess
+  )
 where
 
 import           Control.Monad.State
+import           Data.List
 import           Lens.Micro
 import           Lens.Micro.TH
 import           System.Random
@@ -30,23 +32,29 @@ import qualified Brick.Widgets.Edit            as E
 -- TODO 
 -- Use system shuffle
 
-data Game e = Game {
-    editor   :: e,
-    guesses  :: [String],
-    nbTrials :: Int,
-    values   :: String,
-    secret   :: String  } deriving (Show)
+-- Main state of the game
+data Game e = Game { editor   :: e
+                   , guesses  :: [String]
+                   , nbTrials :: Int
+                   , values   :: String
+                   , secret   :: String  } deriving (Show)
 
+-- Status of the game
+data Status = Won | Lost | Continue deriving (Eq)
+
+-- Change the editor
 setEditor game e = game { editor = e }
 
+-- Apply a fonction to the editor
 applyEditor game fct = game { editor = fct (editor game) }
 
+-- Append guess in front of guesses
 addGuess :: Game e -> String -> Game e
 addGuess game guess = game { guesses = guess : guesses game }
 
--- E.editor Prompt (Just 1) ""
-initGame :: Int -> String -> e -> Game e
-initGame n v e = 
+-- Create a new game
+createGame :: Int -> String -> e -> Game e
+createGame n v e = 
   Game { editor = e
        , guesses = []
        , nbTrials = n
@@ -74,9 +82,6 @@ draw :: RandomGen g => Game e -> Int -> g -> Game e
 draw game nbLetters gen = game { secret = secret'}
   where secret' = take nbLetters $ evalState (shuffle $ values game) gen 
 
--- Status of the game
-data Status = Won | Lost | Continue deriving (Eq)
-
 -- Compute the status of the game
 status :: Game e -> Status
 status game 
@@ -96,4 +101,19 @@ compute game guess = (goodSpot, good - goodSpot)
   s = secret game
   goodSpot = length . filter (uncurry (==)) $ zip s guess
   good     = length $ filter (`elem` s) guess
+
+-- Return the validity of the guess
+-- - the right length
+-- - no repeated letters
+-- - correct values
+validPartialGuess :: Game a -> String -> Bool
+validPartialGuess (Game _ guesses _ values secret) guess = 
+  (length guess <= n) && not (hasDuplicate guess) && all (`elem` values) guess
+    where 
+      n = length secret
+      hasDuplicate w = any (\x -> length x >= 2) $ group $ sort w
+
+-- Return the validity of the guess, partially good with the good length
+validGuess :: Game a -> String -> Bool
+validGuess g guess = validPartialGuess g guess && (length guess == length (secret g))
 
