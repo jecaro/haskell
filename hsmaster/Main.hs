@@ -2,22 +2,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
 
-import           Control.Monad
-import           Control.Monad.State
-import           Control.Monad.Reader
-import           Data.List
-import           Data.Maybe
-import           Safe
-import           System.Console.ANSI
-import           System.Environment
-import           System.IO
-import           System.Random
-import qualified Text.Read                     as TR
-
-import           Lens.Micro
-import           Lens.Micro.TH
-import qualified Graphics.Vty                  as V
-
 import qualified Brick.Main                    as M
 import qualified Brick.Types                   as T
 import           Brick.Widgets.Core
@@ -25,9 +9,20 @@ import qualified Brick.Widgets.Center          as C
 import qualified Brick.Widgets.Border          as B
 import qualified Brick.Widgets.Edit            as E
 import qualified Brick.AttrMap                 as A
+import qualified Brick.Widgets.Dialog as D
 
-import qualified Data.Text.Zipper              as Z
+import           Control.Monad
 import           Control.Arrow                            ( (>>>) )
+import           Data.List
+import           Data.Maybe
+import qualified Data.Text.Zipper              as Z
+import qualified Graphics.Vty                  as V
+import           Safe
+import           System.Console.ANSI
+import           System.Environment
+import           System.IO
+import           System.Random
+import qualified Text.Read                     as TR
 
 import qualified Game                          as G
 
@@ -150,5 +145,5 @@ main = do
       gen <- getStdGen
       -- Init the game and start it
       let defaultEditor = E.editor Prompt (Just 1) ""
-          game = G.draw (G.initGame nbTrials ['0'..'9'] defaultEditor) 4 gen
+          game = G.draw (G.createGame nbTrials ['0'..'9'] defaultEditor) 4 gen
       void $ M.defaultMain theApp game
