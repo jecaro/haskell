@@ -29,7 +29,12 @@ import qualified Brick.AttrMap                 as A
 import qualified Data.Text.Zipper              as Z
 import           Control.Arrow                            ( (>>>) )
 
-import           Game
+import qualified Game                          as G
+
+data Name = Prompt
+          deriving (Ord, Show, Eq)
+
+type Game = G.Game (E.Editor String Name)
 
 -- Check if a list contains duplicates elements
 hasDuplicate :: (Eq a, Ord a) => [a] -> Bool
@@ -69,20 +74,20 @@ usage = do
 showHint :: Game -> String -> String
 showHint game "" = "   "
 showHint game guess = show f ++ " " ++ show s 
-  where (f, s) = compute game guess
+  where (f, s) = G.compute game guess
 
 -- Rendering function
 drawUI :: Game -> [T.Widget Name]
 drawUI game = [ui]
  where
-  e        = E.renderEditor (str . unlines) True (editor game)
-  guesses' = reverse $ take (nbTrials game) $ guesses game ++ repeat ""
+  e        = E.renderEditor (str . unlines) True (G.editor game)
+  guesses' = reverse $ take (G.nbTrials game) $ G.guesses game ++ repeat ""
   fstCol   = map (intersperse ' ') guesses'
   hint     = map (showHint game) guesses'
   ui       = C.center $ hLimit 25 $ B.border $ vBox
     [ hBox
       [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
-      , vLimit (nbTrials game) B.vBorder
+      , vLimit (G.nbTrials game) B.vBorder
       , padLeftRight 2 $ str $ unlines hint
       ]
     , B.hBorder
@@ -90,9 +95,9 @@ drawUI game = [ui]
     ]
 
 -- End of game message
-endMsg :: Status -> Maybe String
-endMsg Won  = Just "You won !"
-endMsg Lost = Just "You loose !"
+endMsg :: G.Status -> Maybe String
+endMsg G.Won  = Just "You won !"
+endMsg G.Lost = Just "You loose !"
 endMsg _    = Nothing
 
 -- Edit a zipper to write a message
@@ -105,31 +110,31 @@ appEvent :: Game -> T.BrickEvent Name e -> T.EventM Name (T.Next Game)
 appEvent game (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt game
 -- Cheat mode, press h to show the secret number
 appEvent game (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
-  M.continue $ applyEditor game $ E.applyEdit (showMsg (secret game)) 
+  M.continue $ G.applyEditor game $ E.applyEdit (showMsg (G.secret game)) 
 -- Main event handler
-appEvent game (T.VtyEvent ev) = if status game /= Continue
+appEvent game (T.VtyEvent ev) = if G.status game /= G.Continue
   then M.halt game
   else do
     -- The new editor with event handled
-    editor' <- E.handleEditorEvent ev (editor game)
+    editor' <- E.handleEditorEvent ev (G.editor game)
     -- Its content
     let guess = unwords $ E.getEditContents editor'
     -- We check the validity of the typed guess
-    if not $ validPartialGuess (length $ secret game) (values game) guess
+    if not $ validPartialGuess (length $ G.secret game) (G.values game) guess
       then M.continue game
       else
         -- Its length is still wrong
-        if length guess < length (secret game)
-        then M.continue $ setEditor game editor'
+        if length guess < length (G.secret game)
+        then M.continue $ G.setEditor game editor'
         else do
           -- Append guess to stack of guesses
-          let game' = addGuess game guess
+          let game' = G.addGuess game guess
           -- Show the message if needed
-          let zipper = case endMsg (status game') of
+          let zipper = case endMsg (G.status game') of
                 Nothing  -> Z.clearZipper
                 Just msg -> showMsg msg
           -- Carry on
-          M.continue $ applyEditor game' $ E.applyEdit zipper 
+          M.continue $ G.applyEditor game' $ E.applyEdit zipper 
 
 appEvent game _ = M.continue game
 
@@ -157,5 +162,6 @@ main = do
       -- Secret word to guess
       gen <- getStdGen
       -- Init the game and start it
-      let game = draw (initGame nbTrials ['0'..'9']) 4 gen
+      let defaultEditor = E.editor Prompt (Just 1) ""
+          game = G.draw (G.initGame nbTrials ['0'..'9'] defaultEditor) 4 gen
       void $ M.defaultMain theApp game

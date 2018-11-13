@@ -2,7 +2,6 @@
 
 module Game (
   Game,
-  Name,
   Status(..),
   -- Fonctions
   initGame,
@@ -30,13 +29,9 @@ import qualified Brick.Widgets.Edit            as E
 
 -- TODO 
 -- Use system shuffle
--- Parametrize Game with Name
 
-data Name = Prompt
-          deriving (Ord, Show, Eq)
-
-data Game = Game {
-    editor   :: E.Editor String Name,
+data Game e = Game {
+    editor   :: e,
     guesses  :: [String],
     nbTrials :: Int,
     values   :: String,
@@ -46,12 +41,13 @@ setEditor game e = game { editor = e }
 
 applyEditor game fct = game { editor = fct (editor game) }
 
-addGuess :: Game -> String -> Game 
+addGuess :: Game e -> String -> Game e
 addGuess game guess = game { guesses = guess : guesses game }
 
-initGame :: Int -> String -> Game
-initGame n v = 
-  Game { editor = E.editor Prompt (Just 1) ""
+-- E.editor Prompt (Just 1) ""
+initGame :: Int -> String -> e -> Game e
+initGame n v e = 
+  Game { editor = e
        , guesses = []
        , nbTrials = n
        , values = v
@@ -73,14 +69,16 @@ shuffle list = do
   let (val, list') = pick list ind
   fmap (val :) (shuffle list')
 
-draw :: RandomGen g => Game -> Int -> g -> Game
+-- Find a new secret for the game
+draw :: RandomGen g => Game e -> Int -> g -> Game e
 draw game nbLetters gen = game { secret = secret'}
   where secret' = take nbLetters $ evalState (shuffle $ values game) gen 
 
 -- Status of the game
 data Status = Won | Lost | Continue deriving (Eq)
 
-status :: Game -> Status
+-- Compute the status of the game
+status :: Game e -> Status
 status game 
   -- no guesses
   | null $ guesses game = Continue
@@ -92,7 +90,7 @@ status game
   | otherwise = Continue
 
 -- Compute the result of the guess
-compute :: Game -> String -> (Int, Int)
+compute :: Game e -> String -> (Int, Int)
 compute game guess = (goodSpot, good - goodSpot)
  where
   s = secret game
