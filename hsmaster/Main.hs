@@ -1,10 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
 
 import           Control.Monad
 import           Control.Monad.State
+import           Control.Monad.Reader
 import           Data.List
 import           Data.Maybe
 import           Safe
@@ -29,45 +29,7 @@ import qualified Brick.AttrMap                 as A
 import qualified Data.Text.Zipper              as Z
 import           Control.Arrow                            ( (>>>) )
 
--- TODO 
--- try to add reader monad again
-
-data Name = Prompt
-          deriving (Ord, Show, Eq)
-
-data St = St {
-  _editor   :: E.Editor String Name,
-  _guesses  :: [String],
-  _nbTrials :: Int,
-  _values   :: String,
-  _secret   :: String  } deriving (Show)
-makeLenses ''St
-
--- Status of the game
-data Status = Won | Lost | Continue deriving (Eq)
-
--- Take a value at a specific index in a list
--- return this value along the remaining list
-pick :: [a] -> Int -> (a, [a])
-pick list ind = (list !! ind, start ++ end)
- where
-  start = take ind list
-  end   = drop (succ ind) list
-
--- Shuffle a list 
-shuffle :: RandomGen g => [a] -> State g [a]
-shuffle []   = return []
-shuffle list = do
-  ind <- state $ randomR (0, length list - 1)
-  let (val, list') = pick list ind
-  fmap (val :) (shuffle list')
-
--- Compute the result of the guess
-compute :: Eq a => [a] -> [a] -> (Int, Int)
-compute secret guess = (goodSpot, good - goodSpot)
- where
-  goodSpot = length . filter (uncurry (==)) $ zip secret guess
-  good     = length $ filter (`elem` secret) guess
+import           Game
 
 -- Check if a list contains duplicates elements
 hasDuplicate :: (Eq a, Ord a) => [a] -> Bool
@@ -104,39 +66,28 @@ usage = do
   putStrLn "-n 10\tSet the number of trials (default 10)"
 
 -- Show the hint for a word
-showHint :: String -> String -> String
-showHint secret "" = "   "
-showHint secret guess = show f ++ " " ++ show s 
-  where (f, s) = compute secret guess
+showHint :: Game -> String -> String
+showHint game "" = "   "
+showHint game guess = show f ++ " " ++ show s 
+  where (f, s) = compute game guess
 
 -- Rendering function
-drawUI :: St -> [T.Widget Name]
-drawUI st = [ui]
+drawUI :: Game -> [T.Widget Name]
+drawUI game = [ui]
  where
-  e        = E.renderEditor (str . unlines) True (st ^. editor)
-  guesses' = reverse $ take (st^.nbTrials) $ st ^. guesses ++ repeat ""
+  e        = E.renderEditor (str . unlines) True (editor game)
+  guesses' = reverse $ take (nbTrials game) $ guesses game ++ repeat ""
   fstCol   = map (intersperse ' ') guesses'
-  hint     = map (showHint (st ^. secret)) guesses'
+  hint     = map (showHint game) guesses'
   ui       = C.center $ hLimit 25 $ B.border $ vBox
     [ hBox
       [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
-      , vLimit (st^.nbTrials) B.vBorder
+      , vLimit (nbTrials game) B.vBorder
       , padLeftRight 2 $ str $ unlines hint
       ]
     , B.hBorder
     , str "> " <+> e
     ]
-
-gameStatus :: St -> Status
-gameStatus st 
-  -- no guesses
-  | null $ st ^. guesses = Continue
-  -- win
-  | head (st ^. guesses) == (st ^. secret) = Won
-  -- loose
-  | length (st ^. guesses) == (st ^. nbTrials) = Lost
-  -- anything else
-  | otherwise = Continue
 
 -- End of game message
 endMsg :: Status -> Maybe String
@@ -149,49 +100,41 @@ showMsg :: Monoid a => String -> Z.TextZipper a -> Z.TextZipper a
 showMsg msg = foldl (>>>) Z.clearZipper $ map Z.insertChar msg
 
 -- Event handler
-appEvent :: St -> T.BrickEvent Name e -> T.EventM Name (T.Next St)
+appEvent :: Game -> T.BrickEvent Name e -> T.EventM Name (T.Next Game)
 -- Quit the game
-appEvent st (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt st
+appEvent game (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt game
 -- Cheat mode, press h to show the secret number
-appEvent st (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
-  M.continue $ st & editor %~ E.applyEdit (showMsg (st ^. secret))
+appEvent game (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
+  M.continue $ applyEditor game $ E.applyEdit (showMsg (secret game)) 
 -- Main event handler
-appEvent st (T.VtyEvent ev) = if gameStatus st /= Continue
-  then M.halt st
+appEvent game (T.VtyEvent ev) = if status game /= Continue
+  then M.halt game
   else do
     -- The new editor with event handled
-    editor' <- E.handleEditorEvent ev (st ^. editor)
+    editor' <- E.handleEditorEvent ev (editor game)
     -- Its content
     let guess = unwords $ E.getEditContents editor'
     -- We check the validity of the typed guess
-    if not $ validPartialGuess (length $ st ^. secret) (st ^. values) guess
-      then M.continue st
+    if not $ validPartialGuess (length $ secret game) (values game) guess
+      then M.continue game
       else
         -- Its length is still wrong
-        if length guess < length (st ^. secret)
-        then M.continue $ st & editor .~ editor'
+        if length guess < length (secret game)
+        then M.continue $ setEditor game editor'
         else do
           -- Append guess to stack of guesses
-          let st' = st & guesses %~ (guess :)
+          let game' = addGuess game guess
           -- Show the message if needed
-          let editor'' = case endMsg (gameStatus st') of
+          let zipper = case endMsg (status game') of
                 Nothing  -> Z.clearZipper
                 Just msg -> showMsg msg
           -- Carry on
-          M.continue $ st' & editor %~ E.applyEdit editor''
+          M.continue $ applyEditor game' $ E.applyEdit zipper 
 
-appEvent st _ = M.continue st
-
--- Initial state
-defaultState :: St
-defaultState = St { _editor = E.editor Prompt (Just 1) ""
-                  , _guesses = []
-                  , _nbTrials = 3
-                  , _values = ['0'..'9']
-                  , _secret = "1234" } 
+appEvent game _ = M.continue game
 
 -- Main record for the brick application
-theApp :: M.App St e Name
+theApp :: M.App Game e Name
 theApp =
     M.App { M.appDraw         = drawUI
           , M.appChooseCursor = M.showFirstCursor
@@ -208,11 +151,11 @@ main = do
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      let nbTrials'  = fromMaybe 10 $ getNbTrials args 
+      let nbTrials  = fromMaybe 10 $ getNbTrials args 
       -- Game configuration
       let nbLetters = 4
       -- Secret word to guess
       gen <- getStdGen
-      let secret' = take nbLetters $ evalState (shuffle $ defaultState^.values) gen 
-      let initialState = defaultState & nbTrials .~ nbTrials' & secret .~ secret'
-      void $ M.defaultMain theApp initialState
+      -- Init the game and start it
+      let game = draw (initGame nbTrials ['0'..'9']) 4 gen
+      void $ M.defaultMain theApp game

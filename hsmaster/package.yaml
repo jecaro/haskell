@@ -1,17 +1,17 @@
 copyright: 2018 Jean-Charles Quillet
 maintainer: jeancharles.quillet@gmail.com
 dependencies:
-- text-zipper
-- text
-- microlens-th
-- microlens
-- vty
-- brick
+- ansi-terminal
 - base >= 4.7 && < 5
+- brick
+- microlens
+- microlens-th
 - mtl
 - random
-- ansi-terminal
 - safe
+- text
+- text-zipper
+- vty
 name: hsmaster
 version: 0.1.0.0
 extra-source-files:
