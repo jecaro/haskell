@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Game
   ( Game
@@ -11,13 +12,10 @@ module Game
   , validPartialGuess
   , validGuess
   -- Getters
-  , editor
   , nbTrials
   , secret
   , guesses
   -- Setters
-  , setEditor
-  , applyEditor
   , addGuess
   )
 where
@@ -33,33 +31,27 @@ import qualified Brick.Widgets.Edit            as E
 -- Use system shuffle
 
 -- Main state of the game
-data Game e = Game { editor   :: e
-                   , guesses  :: [String]
-                   , nbTrials :: Int
-                   , values   :: String
-                   , secret   :: String  } deriving (Show)
+data Game = Game { _guesses  :: [String]
+                 , _nbTrials :: Int
+                 , _values   :: String
+                 , _secret   :: String  } deriving (Show)
+makeLenses ''Game
 
+                 
 -- Status of the game
 data Status = Won | Lost | Continue deriving (Eq)
 
--- Change the editor
-setEditor game e = game { editor = e }
-
--- Apply a fonction to the editor
-applyEditor game fct = game { editor = fct (editor game) }
-
 -- Append guess in front of guesses
-addGuess :: Game e -> String -> Game e
-addGuess game guess = game { guesses = guess : guesses game }
+addGuess :: Game -> String -> Game
+addGuess game guess = game & guesses %~ (guess:)
 
 -- Create a new game
-createGame :: Int -> String -> e -> Game e
-createGame n v e = 
-  Game { editor = e
-       , guesses = []
-       , nbTrials = n
-       , values = v
-       , secret = "" } 
+createGame :: Int -> String -> Game
+createGame n v = 
+  Game { _guesses = []
+       , _nbTrials = n
+       , _values = v
+       , _secret = "" } 
 
 -- Take a value at a specific index in a list
 -- return this value along the remaining list
@@ -78,27 +70,27 @@ shuffle list = do
   fmap (val :) (shuffle list')
 
 -- Find a new secret for the game
-draw :: RandomGen g => Game e -> Int -> g -> Game e
-draw game nbLetters gen = game { secret = secret'}
-  where secret' = take nbLetters $ evalState (shuffle $ values game) gen 
+draw :: RandomGen g => Game -> Int -> g -> Game
+draw game nbLetters gen = game & secret .~ secret'
+  where secret' = take nbLetters $ evalState (shuffle $ game ^. values) gen 
 
 -- Compute the status of the game
-status :: Game e -> Status
+status :: Game -> Status
 status game 
   -- no guesses
-  | null $ guesses game = Continue
+  | null $ game ^. guesses = Continue
   -- win
-  | head (guesses game) == secret game = Won
+  | head (game ^. guesses) == game ^. secret = Won
   -- loose
-  | length (guesses game) == nbTrials game = Lost
+  | length (game ^. guesses) == game ^. nbTrials = Lost
   -- anything else
   | otherwise = Continue
 
 -- Compute the result of the guess
-compute :: Game e -> String -> (Int, Int)
+compute :: Game -> String -> (Int, Int)
 compute game guess = (goodSpot, good - goodSpot)
  where
-  s = secret game
+  s = _secret game
   goodSpot = length . filter (uncurry (==)) $ zip s guess
   good     = length $ filter (`elem` s) guess
 
@@ -106,14 +98,14 @@ compute game guess = (goodSpot, good - goodSpot)
 -- - the right length
 -- - no repeated letters
 -- - correct values
-validPartialGuess :: Game a -> String -> Bool
-validPartialGuess (Game _ guesses _ values secret) guess = 
+validPartialGuess :: Game -> String -> Bool
+validPartialGuess (Game guesses _ values secret) guess = 
   (length guess <= n) && not (hasDuplicate guess) && all (`elem` values) guess
     where 
       n = length secret
       hasDuplicate w = any (\x -> length x >= 2) $ group $ sort w
 
 -- Return the validity of the guess, partially good with the good length
-validGuess :: Game a -> String -> Bool
-validGuess g guess = validPartialGuess g guess && (length guess == length (secret g))
+validGuess :: Game -> String -> Bool
+validGuess g guess = validPartialGuess g guess && (length guess == length (g ^. secret))
 
