@@ -53,8 +53,8 @@ getGuesses :: SimpleGetter Game [String]
 getGuesses = guesses 
 
 -- Append guess in front of guesses
-addGuess :: Game -> String -> Game
-addGuess game guess = game & guesses %~ (guess:)
+addGuess :: String -> Game -> Game
+addGuess guess game = game & guesses %~ (guess:)
 
 -- Create a new game
 createGame :: Int -> String -> Game

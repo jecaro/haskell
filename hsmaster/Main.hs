@@ -32,6 +32,7 @@ import           Lens.Micro.TH
 
 -- TODO
 -- put hint in separate window
+-- put eog window on top of the prompt
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
@@ -64,7 +65,7 @@ usage = do
 -- Show the hint for a word
 showHint :: Game -> String -> String
 showHint game "" = "   "
-showHint game guess = show f ++ " " ++ show s 
+showHint game guess = show f ++ " " ++ show s
   where (f, s) = compute game guess
 
 -- End of game message
@@ -109,9 +110,9 @@ appEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt state
 -- Cheat mode, press h to show the secret number
 appEvent state (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
-  M.continue $ state & editor %~ E.applyEdit (showMsg (state ^. game . getSecret)) 
+  M.continue $ state & editor %~ E.applyEdit (showMsg (state ^. game . getSecret))
 -- Main event handler
-appEvent state (T.VtyEvent ev) = 
+appEvent state (T.VtyEvent ev) =
   if status (state ^. game) /= Continue
   then M.halt state
   else do
@@ -126,11 +127,9 @@ appEvent state (T.VtyEvent ev) =
         -- Its length is still wrong
         if not $ validGuess (state ^. game) guess
         then M.continue $ state & editor .~ editor'
-        else do
-          -- Append guess to stack of guesses
-          let game' = addGuess (state ^. game) guess
-          -- Carry on
-          M.continue $ state & game .~ game' & editor %~ E.applyEdit Z.clearZipper  
+        else M.continue $ state 
+          & game   %~ addGuess guess 
+          & editor %~ E.applyEdit Z.clearZipper
 
 appEvent game _ = M.continue game
 
@@ -141,18 +140,18 @@ theApp =
           , M.appChooseCursor = M.showFirstCursor
           , M.appHandleEvent  = appEvent
           , M.appStartEvent   = return
-          , M.appAttrMap      = const $ A.attrMap V.defAttr [] 
+          , M.appAttrMap      = const $ A.attrMap V.defAttr []
           }
 
 -- Main function
 main :: IO ()
 main = do
   -- Arguments initialization
-  args <- getArgs 
+  args <- getArgs
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      let nbTrials  = fromMaybe 10 $ getNbTrialsFromArgs args 
+      let nbTrials  = fromMaybe 10 $ getNbTrialsFromArgs args
       -- Game configuration
       let nbLetters = 4
       -- Secret word to guess
