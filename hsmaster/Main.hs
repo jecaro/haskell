@@ -41,8 +41,8 @@ data State = State { _game   :: Game
 makeLenses ''State
 
 -- Get the number of trials from arg list
-getNbTrials :: [String] -> Maybe Int
-getNbTrials args = do
+getNbTrialsFromArgs :: [String] -> Maybe Int
+getNbTrialsFromArgs args = do
   ind <- "-n" `elemIndex` args
   el  <- atMay args $ succ ind
   TR.readMaybe el
@@ -86,13 +86,13 @@ drawUI state = msg:[mainWidget]
     msg        = fromMaybe emptyWidget $ endMsgWidget state
     g          = state ^. game
     e          = E.renderEditor (str . unlines) True $ state ^. editor
-    guesses'   = reverse $ take (g ^. nbTrials) $ g ^. guesses ++ repeat ""
-    fstCol     = map (intersperse ' ') guesses'
-    sndCol     = map (showHint g) guesses'
+    guesses    = reverse $ take (g ^. getNbTrials) $ g ^. getGuesses ++ repeat ""
+    fstCol     = map (intersperse ' ') guesses
+    sndCol     = map (showHint g) guesses
     mainWidget = C.center $ hLimit 25 $ B.border $ vBox
       [ hBox
         [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
-        , vLimit (g ^. nbTrials) B.vBorder
+        , vLimit (g ^. getNbTrials) B.vBorder
         , padLeftRight 2 $ str $ unlines sndCol
         ]
       , B.hBorder
@@ -109,7 +109,7 @@ appEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt state
 -- Cheat mode, press h to show the secret number
 appEvent state (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
-  M.continue $ state & editor %~ E.applyEdit (showMsg (state ^. game . secret)) 
+  M.continue $ state & editor %~ E.applyEdit (showMsg (state ^. game . getSecret)) 
 -- Main event handler
 appEvent state (T.VtyEvent ev) = 
   if status (state ^. game) /= Continue
@@ -152,12 +152,13 @@ main = do
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      let nbTrials  = fromMaybe 10 $ getNbTrials args 
+      let nbTrials  = fromMaybe 10 $ getNbTrialsFromArgs args 
       -- Game configuration
       let nbLetters = 4
       -- Secret word to guess
       gen <- getStdGen
       -- Init the game and start it
       let defaultEditor = E.editor Prompt (Just 1) ""
-          game = draw (createGame nbTrials ['0'..'9']) 4 gen
-      void $ M.defaultMain theApp (State game defaultEditor)
+          game' = draw (createGame nbTrials ['0'..'9']) 4 gen
+          --game' = game_ & getNbTrials .~ 2
+      void $ M.defaultMain theApp (State game' defaultEditor)

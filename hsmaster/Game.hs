@@ -12,9 +12,9 @@ module Game
   , validPartialGuess
   , validGuess
   -- Getters
-  , nbTrials
-  , secret
-  , guesses
+  , getNbTrials
+  , getSecret
+  , getGuesses
   -- Setters
   , addGuess
   )
@@ -24,12 +24,11 @@ import           Control.Monad.State
 import           Data.List
 import           Lens.Micro
 import           Lens.Micro.TH
+import           Lens.Micro.Type
 import           System.Random
-import qualified Brick.Widgets.Edit            as E
 
 -- TODO 
 -- Use system shuffle
--- Expose read only lens
 
 -- Main state of the game
 data Game = Game { _guesses  :: [String]
@@ -37,10 +36,21 @@ data Game = Game { _guesses  :: [String]
                  , _values   :: String
                  , _secret   :: String  } deriving (Show)
 makeLenses ''Game
-
                  
 -- Status of the game
 data Status = Won | Lost | Continue deriving (Eq)
+
+-- Read only lens
+getNbTrials :: SimpleGetter Game Int
+getNbTrials = nbTrials 
+
+-- Read only lens
+getSecret :: SimpleGetter Game String
+getSecret = secret 
+
+-- Read only lens
+getGuesses :: SimpleGetter Game [String]
+getGuesses = guesses 
 
 -- Append guess in front of guesses
 addGuess :: Game -> String -> Game
