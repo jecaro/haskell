@@ -30,6 +30,8 @@ import           Game
 import           Lens.Micro
 import           Lens.Micro.TH
 
+-- TODO
+-- put hint in separate window
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
@@ -65,30 +67,37 @@ showHint game "" = "   "
 showHint game guess = show f ++ " " ++ show s 
   where (f, s) = compute game guess
 
--- Rendering function
-drawUI :: State -> [T.Widget Name]
-drawUI state = [ui]
- where
-  g        = state ^. game
-  e        = E.renderEditor (str . unlines) True $ state ^. editor
-  guesses' = reverse $ take (g ^. nbTrials) $ g ^. guesses ++ repeat ""
-  fstCol   = map (intersperse ' ') guesses'
-  hint     = map (showHint g) guesses'
-  ui       = C.center $ hLimit 25 $ B.border $ vBox
-    [ hBox
-      [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
-      , vLimit (g ^. nbTrials) B.vBorder
-      , padLeftRight 2 $ str $ unlines hint
-      ]
-    , B.hBorder
-    , str "> " <+> e
-    ]
-
 -- End of game message
 endMsg :: Status -> Maybe String
 endMsg Won  = Just "You won !"
 endMsg Lost = Just "You loose !"
 endMsg _    = Nothing
+
+-- Create a simple widget showing the eog message
+endMsgWidget :: State -> Maybe (T.Widget n)
+endMsgWidget state = do
+  msg <- endMsg $ status (state ^. game)
+  return $ C.centerLayer $ B.border $ padLeftRight 2 $ str msg
+
+-- Rendering function
+drawUI :: State -> [T.Widget Name]
+drawUI state = msg:[mainWidget]
+  where
+    msg        = fromMaybe emptyWidget $ endMsgWidget state
+    g          = state ^. game
+    e          = E.renderEditor (str . unlines) True $ state ^. editor
+    guesses'   = reverse $ take (g ^. nbTrials) $ g ^. guesses ++ repeat ""
+    fstCol     = map (intersperse ' ') guesses'
+    sndCol     = map (showHint g) guesses'
+    mainWidget = C.center $ hLimit 25 $ B.border $ vBox
+      [ hBox
+        [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
+        , vLimit (g ^. nbTrials) B.vBorder
+        , padLeftRight 2 $ str $ unlines sndCol
+        ]
+      , B.hBorder
+      , str "> " <+> e
+      ]
 
 -- Edit a zipper to write a message
 showMsg :: Monoid a => String -> Z.TextZipper a -> Z.TextZipper a
@@ -102,7 +111,8 @@ appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt state
 appEvent state (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
   M.continue $ state & editor %~ E.applyEdit (showMsg (state ^. game . secret)) 
 -- Main event handler
-appEvent state (T.VtyEvent ev) = if status (state ^. game) /= Continue
+appEvent state (T.VtyEvent ev) = 
+  if status (state ^. game) /= Continue
   then M.halt state
   else do
     -- The new editor with event handled
@@ -119,12 +129,8 @@ appEvent state (T.VtyEvent ev) = if status (state ^. game) /= Continue
         else do
           -- Append guess to stack of guesses
           let game' = addGuess (state ^. game) guess
-          -- Show the message if needed
-          let zipper = case endMsg (status game') of
-                Nothing  -> Z.clearZipper
-                Just msg -> showMsg msg
           -- Carry on
-          M.continue $ state & game .~ game' & editor %~ E.applyEdit zipper 
+          M.continue $ state & game .~ game' & editor %~ E.applyEdit Z.clearZipper  
 
 appEvent game _ = M.continue game
 

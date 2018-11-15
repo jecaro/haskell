@@ -29,6 +29,7 @@ import qualified Brick.Widgets.Edit            as E
 
 -- TODO 
 -- Use system shuffle
+-- Expose read only lens
 
 -- Main state of the game
 data Game = Game { _guesses  :: [String]
