@@ -10,7 +10,6 @@ import qualified Brick.Widgets.Center          as C
 import qualified Brick.Widgets.Border          as B
 import qualified Brick.Widgets.Edit            as E
 import qualified Brick.AttrMap                 as A
-import qualified Brick.Widgets.Dialog as D
 
 import           Control.Monad
 import           Control.Arrow                            ( (>>>) )
@@ -18,6 +17,8 @@ import           Data.List
 import           Data.Maybe
 import qualified Data.Text.Zipper              as Z
 import qualified Graphics.Vty                  as V
+import           Lens.Micro
+import           Lens.Micro.TH
 import           Safe
 import           System.Console.ANSI
 import           System.Environment
@@ -27,17 +28,12 @@ import qualified Text.Read                     as TR
 
 import           Game
 
-import           Lens.Micro
-import           Lens.Micro.TH
-
--- TODO
--- put hint in separate window
-
 data Name = Prompt
           deriving (Ord, Show, Eq)
 
 data State = State { _game   :: Game
-                   , _editor :: E.Editor String Name }
+                   , _editor :: E.Editor String Name
+                   , _hint   :: Bool}
 makeLenses ''State
 
 -- Get the number of trials from arg list
@@ -73,19 +69,25 @@ endMsg Won  = Just "You won !"
 endMsg Lost = Just "You loose !"
 endMsg _    = Nothing
 
+-- Show a message in a separate layer
+msgWidget :: State -> String -> T.Widget n
+msgWidget state msg = let offset = T.Location (0, state ^. game . getNbTrials + 5)
+  in C.centerLayer $ translateBy offset
+    $ B.border $ padLeftRight 3 $ padTopBottom 1 $ str msg
+
 -- Create a simple widget showing the eog message
 endMsgWidget :: State -> Maybe (T.Widget n)
 endMsgWidget state = do
   msg <- endMsg $ status (state ^. game)
-  let offset = T.Location (0, state ^. game . getNbTrials + 5)
-  return $ C.centerLayer $ translateBy offset
-    $ B.border $ padLeftRight 2 $ padTopBottom 1 $ str msg
+  return $ msgWidget state msg
 
 -- Rendering function
 drawUI :: State -> [T.Widget Name]
 drawUI state = msg:[mainWidget]
   where
-    msg        = fromMaybe emptyWidget $ endMsgWidget state
+    msg        = if state ^. hint 
+      then msgWidget state $ state ^. game . getSecret
+      else fromMaybe emptyWidget $ endMsgWidget state
     g          = state ^. game
     e          = E.renderEditor (str . unlines) True $ state ^. editor
     guesses    = reverse $ take (g ^. getNbTrials) $ g ^. getGuesses ++ repeat ""
@@ -101,37 +103,37 @@ drawUI state = msg:[mainWidget]
       , str "> " <+> e
       ]
 
--- Edit a zipper to write a message
-showMsg :: Monoid a => String -> Z.TextZipper a -> Z.TextZipper a
-showMsg msg = foldl (>>>) Z.clearZipper $ map Z.insertChar msg
-
 -- Event handler
 appEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 -- Quit the game
 appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt state
 -- Cheat mode, press h to show the secret number
 appEvent state (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
-  M.continue $ state & editor %~ E.applyEdit (showMsg (state ^. game . getSecret))
+  M.continue $ state & hint .~ True
 -- Main event handler
-appEvent state (T.VtyEvent ev) = if status (state ^. game) /= Continue
-  then M.halt state
-  else do
+appEvent state (T.VtyEvent ev)
+  -- Show the hint
+  | state ^. hint = M.continue $ state & hint .~ False
+  -- End of the game
+  | status (state ^. game) /= Continue = M.halt state
+  -- Main
+  | otherwise = do
   -- The new editor with event handled
-    editor' <- E.handleEditorEvent ev (state ^. editor)
-    -- Its content
-    let guess = unwords $ E.getEditContents editor'
-    -- We check the validity of the typed guess
-    if not $ validPartialGuess (state ^. game) guess
-      then M.continue state
-      else
-        let state' = if not $ validGuess (state ^. game) guess
-            -- The guess is not long enough, carry on
-              then state & editor .~ editor'
-            -- The guess is ok, append it to the guess list
-            -- and reset the editor
-              else state & game   %~ addGuess guess
-                         & editor %~ E.applyEdit Z.clearZipper
-        in M.continue state'
+  editor' <- E.handleEditorEvent ev (state ^. editor)
+  -- Its content
+  let guess = unwords $ E.getEditContents editor'
+  -- We check the validity of the typed guess
+  if not $ validPartialGuess (state ^. game) guess
+    then M.continue state
+    else
+      let state' = if not $ validGuess (state ^. game) guess
+          -- The guess is not long enough, carry on
+            then state & editor .~ editor'
+          -- The guess is ok, append it to the guess list
+          -- and reset the editor
+            else state & game   %~ addGuess guess
+                       & editor %~ E.applyEdit Z.clearZipper
+      in M.continue state'
 appEvent game _ = M.continue game
 
 -- Main record for the brick application
@@ -161,4 +163,4 @@ main = do
       let defaultEditor = E.editor Prompt (Just 1) ""
           game' = draw (createGame nbTrials ['0'..'9']) 4 gen
           --game' = game_ & getNbTrials .~ 2
-      void $ M.defaultMain theApp (State game' defaultEditor)
+      void $ M.defaultMain theApp (State game' defaultEditor False)
