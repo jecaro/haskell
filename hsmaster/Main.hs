@@ -112,11 +112,10 @@ appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt state
 appEvent state (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
   M.continue $ state & editor %~ E.applyEdit (showMsg (state ^. game . getSecret))
 -- Main event handler
-appEvent state (T.VtyEvent ev) =
-  if status (state ^. game) /= Continue
+appEvent state (T.VtyEvent ev) = if status (state ^. game) /= Continue
   then M.halt state
   else do
-    -- The new editor with event handled
+  -- The new editor with event handled
     editor' <- E.handleEditorEvent ev (state ^. editor)
     -- Its content
     let guess = unwords $ E.getEditContents editor'
@@ -124,13 +123,14 @@ appEvent state (T.VtyEvent ev) =
     if not $ validPartialGuess (state ^. game) guess
       then M.continue state
       else
-        -- Its length is still wrong
-        if not $ validGuess (state ^. game) guess
-        then M.continue $ state & editor .~ editor'
-        else M.continue $ state 
-          & game   %~ addGuess guess 
-          & editor %~ E.applyEdit Z.clearZipper
-
+        let state' = if not $ validGuess (state ^. game) guess
+            -- The guess is not long enough, carry on
+              then state & editor .~ editor'
+            -- The guess is ok, append it to the guess list
+            -- and reset the editor
+              else state & game   %~ addGuess guess
+                         & editor %~ E.applyEdit Z.clearZipper
+        in M.continue state'
 appEvent game _ = M.continue game
 
 -- Main record for the brick application
