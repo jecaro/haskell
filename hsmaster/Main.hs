@@ -32,7 +32,6 @@ import           Lens.Micro.TH
 
 -- TODO
 -- put hint in separate window
--- put eog window on top of the prompt
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
@@ -78,7 +77,9 @@ endMsg _    = Nothing
 endMsgWidget :: State -> Maybe (T.Widget n)
 endMsgWidget state = do
   msg <- endMsg $ status (state ^. game)
-  return $ C.centerLayer $ B.border $ padLeftRight 2 $ str msg
+  let offset = T.Location (0, state ^. game . getNbTrials + 5)
+  return $ C.centerLayer $ translateBy offset
+    $ B.border $ padLeftRight 2 $ padTopBottom 1 $ str msg
 
 -- Rendering function
 drawUI :: State -> [T.Widget Name]
