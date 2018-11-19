@@ -28,6 +28,9 @@ import qualified Text.Read                     as TR
 
 import           Game
 
+-- TODO
+-- Add message: Another game ?
+
 data Name = Prompt
           deriving (Ord, Show, Eq)
 
@@ -77,15 +80,13 @@ msgWidget state msg = let offset = T.Location (0, state ^. game . getNbTrials + 
 
 -- Create a simple widget showing the eog message
 endMsgWidget :: State -> Maybe (T.Widget n)
-endMsgWidget state = do
-  msg <- endMsg $ status (state ^. game)
-  return $ msgWidget state msg
+endMsgWidget state = fmap (msgWidget state) $ endMsg $ status (state ^. game)
 
 -- Rendering function
 drawUI :: State -> [T.Widget Name]
 drawUI state = msg:[mainWidget]
   where
-    msg        = if state ^. hint 
+    msg        = if state ^. hint
       then msgWidget state $ state ^. game . getSecret
       else fromMaybe emptyWidget $ endMsgWidget state
     g          = state ^. game
@@ -154,7 +155,7 @@ main = do
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      let nbTrials  = fromMaybe 10 $ getNbTrialsFromArgs args
+      let nbTrials = fromMaybe 10 $ getNbTrialsFromArgs args
       -- Game configuration
       let nbLetters = 4
       -- Secret word to guess
@@ -162,5 +163,4 @@ main = do
       -- Init the game and start it
       let defaultEditor = E.editor Prompt (Just 1) ""
           game' = draw (createGame nbTrials ['0'..'9']) 4 gen
-          --game' = game_ & getNbTrials .~ 2
       void $ M.defaultMain theApp (State game' defaultEditor False)
