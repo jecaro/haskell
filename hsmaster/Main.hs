@@ -3,13 +3,15 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE RankNTypes #-}
 
+import qualified Brick.AttrMap                 as A
 import qualified Brick.Main                    as M
 import qualified Brick.Types                   as T
+import           Brick.Util (on, bg)
 import           Brick.Widgets.Core
 import qualified Brick.Widgets.Center          as C
 import qualified Brick.Widgets.Border          as B
+import qualified Brick.Widgets.Dialog          as D
 import qualified Brick.Widgets.Edit            as E
-import qualified Brick.AttrMap                 as A
 
 import           Control.Monad
 import           Control.Arrow                            ( (>>>) )
@@ -24,6 +26,7 @@ import           System.Console.ANSI
 import           System.Environment
 import           System.IO
 import           System.Random
+import           System.Random.Shuffle
 import qualified Text.Read                     as TR
 
 import           Game
@@ -34,9 +37,12 @@ import           Game
 data Name = Prompt
           deriving (Ord, Show, Eq)
 
+data YesNo = Yes | No deriving Show
+
 data State = State { _game   :: Game
                    , _editor :: E.Editor String Name
-                   , _hint   :: Bool}
+                   , _yesNo  :: Maybe (D.Dialog YesNo)
+                   }
 makeLenses ''State
 
 -- Get the number of trials from arg list
@@ -72,23 +78,24 @@ endMsg Won  = Just "You won !"
 endMsg Lost = Just "You loose !"
 endMsg _    = Nothing
 
--- Show a message in a separate layer
-msgWidget :: State -> String -> T.Widget n
-msgWidget state msg = let offset = T.Location (0, state ^. game . getNbTrials + 5)
-  in C.centerLayer $ translateBy offset
-    $ B.border $ padLeftRight 3 $ padTopBottom 1 $ str msg
+yesNoDialog :: D.Dialog YesNo
+yesNoDialog = D.dialog Nothing (Just (1, choices)) 30
+  where choices = [("Yes", Yes), ("No", No)]
 
--- Create a simple widget showing the eog message
-endMsgWidget :: State -> Maybe (T.Widget n)
-endMsgWidget state = fmap (msgWidget state) $ endMsg $ status (state ^. game)
+no :: D.Dialog YesNo -> D.Dialog YesNo
+no d = d & D.dialogSelectedIndexL ?~ 1
 
 -- Rendering function
 drawUI :: State -> [T.Widget Name]
-drawUI state = msg:[mainWidget]
+drawUI state = [msgWidget, mainWidget]
   where
-    msg        = if state ^. hint
-      then msgWidget state $ state ^. game . getSecret
-      else fromMaybe emptyWidget $ endMsgWidget state
+    msgWidget
+      | isJust $ state ^. yesNo = dialog $ C.hCenter $ padAll 1 
+                                  $ str $ endStr ++ " Another game ?"
+      | otherwise               = emptyWidget
+        where 
+          dialog = D.renderDialog (fromJust $ state ^. yesNo)
+          endStr = fromMaybe "" (endMsg $ status (state ^. game)) 
     g          = state ^. game
     e          = E.renderEditor (str . unlines) True $ state ^. editor
     guesses    = reverse $ take (g ^. getNbTrials) $ g ^. getGuesses ++ repeat ""
@@ -107,35 +114,40 @@ drawUI state = msg:[mainWidget]
 -- Event handler
 appEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 -- Quit the game
-appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt state
--- Cheat mode, press h to show the secret number
-appEvent state (T.VtyEvent (V.EvKey (V.KChar 'h') [])) =
-  M.continue $ state & hint .~ True
+appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt $ state & yesNo ?~ no yesNoDialog
 -- Main event handler
-appEvent state (T.VtyEvent ev)
-  -- Show the hint
-  | state ^. hint = M.continue $ state & hint .~ False
-  -- End of the game
-  | status (state ^. game) /= Continue = M.halt state
-  -- Main
-  | otherwise = do
-  -- The new editor with event handled
-  editor' <- E.handleEditorEvent ev (state ^. editor)
-  -- Its content
-  let guess = unwords $ E.getEditContents editor'
-  -- We check the validity of the typed guess
-  if not $ validPartialGuess (state ^. game) guess
-    then M.continue state
-    else
-      let state' = if not $ validGuess (state ^. game) guess
-          -- The guess is not long enough, carry on
-            then state & editor .~ editor'
-          -- The guess is ok, append it to the guess list
-          -- and reset the editor
-            else state & game   %~ addGuess guess
-                       & editor %~ E.applyEdit Z.clearZipper
-      in M.continue state'
+appEvent state (T.VtyEvent ev) = 
+    if isJust (state ^. yesNo) 
+    then do 
+      yesNo' <- D.handleDialogEvent ev $ fromJust $ state ^. yesNo
+      if ev == V.EvKey V.KEnter [] || ev == V.EvKey V.KEsc [] --toggleNo
+      then M.halt $ state & (yesNo ?~ yesNo')
+      else M.continue $ state & (yesNo ?~ yesNo')
+    else do
+      -- The new editor with event handled
+      editor' <- E.handleEditorEvent ev (state ^. editor)
+      -- Its content
+      let guess = unwords $ E.getEditContents editor'
+      -- We check the validity of the typed guess
+      if not $ validPartialGuess (state ^. game) guess
+        then M.continue state
+        else
+          let state' = if not $ validGuess (state ^. game) guess
+              -- The guess is not long enough, carry on
+                then state & editor .~ editor'
+              -- The guess is ok, append it to the guess list
+              -- and reset the editor
+                else state & editor %~ E.applyEdit Z.clearZipper
+                           & game   %~ addGuess guess
+          in M.continue $ state' & yesNo .~ (case status (state' ^. game) of 
+                                             Continue -> Nothing
+                                             _ -> Just yesNoDialog)
 appEvent game _ = M.continue game
+
+theMap :: A.AttrMap
+theMap = A.attrMap V.defAttr
+    [ (D.buttonSelectedAttr, bg V.black)
+    ]
 
 -- Main record for the brick application
 theApp :: M.App State e Name
@@ -144,7 +156,7 @@ theApp =
           , M.appChooseCursor = M.showFirstCursor
           , M.appHandleEvent  = appEvent
           , M.appStartEvent   = return
-          , M.appAttrMap      = const $ A.attrMap V.defAttr []
+          , M.appAttrMap      = const theMap
           }
 
 -- Main function
@@ -163,4 +175,7 @@ main = do
       -- Init the game and start it
       let defaultEditor = E.editor Prompt (Just 1) ""
           game' = draw (createGame nbTrials ['0'..'9']) 4 gen
-      void $ M.defaultMain theApp (State game' defaultEditor False)
+      print $ game' ^. getSecret
+      c <- getChar 
+      state' <- M.defaultMain theApp (State game' defaultEditor Nothing)
+      print $ show (D.dialogSelection $ fromJust $ state' ^. yesNo)

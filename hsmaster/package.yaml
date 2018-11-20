@@ -8,6 +8,7 @@ dependencies:
 - microlens-th
 - mtl
 - random
+- random-shuffle
 - safe
 - text
 - text-zipper
