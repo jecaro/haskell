@@ -90,31 +90,37 @@ yesNoDialog :: D.Dialog YesNo
 yesNoDialog = D.dialog Nothing (Just (0, choices)) 30
   where choices = [("Yes", Yes), ("No", No)]
 
--- Rendering function
-drawUI :: State -> [T.Widget Name]
-drawUI state = [msgWidget, mainWidget]
+-- Draw the dialog
+drawDialog :: State -> T.Widget Name
+drawDialog State { _yesNo = Just yn, _game = game } =   
+  dialog $ C.hCenter $ padAll 1 $ str $ endStr ++ " Another game ?"
   where
-    msgWidget
-      | isJust $ state ^. yesNo = dialog $ C.hCenter $ padAll 1
-                                  $ str $ endStr ++ " Another game ?"
-      | otherwise               = emptyWidget
-        where
-          dialog = D.renderDialog (fromJust $ state ^. yesNo)
-          endStr = fromMaybe "" (endMsg $ status (state ^. game))
-    g          = state ^. game
-    e          = E.renderEditor (str . unlines) True $ state ^. editor
-    guesses    = reverse $ take (g ^. getNbTrials) $ g ^. getGuesses ++ repeat ""
+    dialog = D.renderDialog yn
+    endStr = fromMaybe "" (endMsg $ status game)
+drawDialog _ = emptyWidget
+
+-- Draw the main widget
+drawMain :: State -> T.Widget Name
+drawMain State { _game = g, _editor = e } = 
+  C.center $ hLimit 25 $ B.border $ vBox
+  [ hBox
+    [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
+    , vLimit nbTrials B.vBorder
+    , padLeftRight 2 $ str $ unlines sndCol
+    ]
+  , B.hBorder
+  , str "> " <+> re
+  ]
+  where
+    nbTrials   = g ^. getNbTrials
+    re         = E.renderEditor (str . unlines) True e
+    guesses    = reverse $ take nbTrials $ g ^. getGuesses ++ repeat ""
     fstCol     = map (intersperse ' ') guesses
     sndCol     = map (showHint g) guesses
-    mainWidget = C.center $ hLimit 25 $ B.border $ vBox
-      [ hBox
-        [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
-        , vLimit (g ^. getNbTrials) B.vBorder
-        , padLeftRight 2 $ str $ unlines sndCol
-        ]
-      , B.hBorder
-      , str "> " <+> e
-      ]
+
+-- Rendering function
+drawUI :: State -> [T.Widget Name]
+drawUI state = [drawDialog state, drawMain state]
 
 -- Handle the dialog events
 handleDialogEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
