@@ -45,11 +45,11 @@ data YesNo = Yes | No deriving Show
 
 data Widget = Editor (E.Editor String Name) | Dialog (D.Dialog YesNo)
 
-data State = State { _game   :: Game
-                   , _editor :: E.Editor String Name 
-                   , _yesNo  :: Maybe (D.Dialog YesNo)
-                   }
-makeLenses ''State
+data GameState = GameState { _game   :: Game
+                           , _editor :: E.Editor String Name 
+                           , _yesNo  :: Maybe (D.Dialog YesNo)
+                           }
+makeLenses ''GameState
 
 -- Get the number of trials from arg list
 getNbTrialsFromArgs :: [String] -> Maybe Int
@@ -90,8 +90,8 @@ yesNoDialog = D.dialog Nothing (Just (0, choices)) 30
   where choices = [("Yes", Yes), ("No", No)]
 
 -- Draw the dialog
-drawDialog :: State -> T.Widget Name
-drawDialog State { _yesNo = Just yn, _game = game } =
+drawDialog :: GameState -> T.Widget Name
+drawDialog GameState { _yesNo = Just yn, _game = game } =
   case endMsg $ status game of
     Nothing      -> emptyWidget
     Just endStr  -> D.renderDialog yn $ C.hCenter $ padAll 1 
@@ -99,8 +99,8 @@ drawDialog State { _yesNo = Just yn, _game = game } =
 drawDialog _ = emptyWidget
 
 -- Draw the main widget
-drawMain :: State -> T.Widget Name
-drawMain State { _game = g, _editor = e } = 
+drawMain :: GameState -> T.Widget Name
+drawMain GameState { _game = g, _editor = e } = 
   C.center $ hLimit 25 $ B.border $ vBox
   [ hBox
     [ padLeftRight 2 $ C.hCenter $ str $ unlines fstCol
@@ -118,12 +118,12 @@ drawMain State { _game = g, _editor = e } =
     re         = E.renderEditor (str . unlines) True e
 
 -- Rendering function
-drawUI :: State -> [T.Widget Name]
+drawUI :: GameState -> [T.Widget Name]
 drawUI state = [ f state | f <- [drawDialog, drawMain] ]
 
 -- Handle the dialog events
-handleDialogEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
-handleDialogEvent state@State { _yesNo = (Just yn) } (T.VtyEvent ev) = do
+handleDialogEvent :: GameState -> T.BrickEvent Name e -> T.EventM Name (T.Next GameState)
+handleDialogEvent state@GameState { _yesNo = (Just yn) } (T.VtyEvent ev) = do
   -- Handle event
   yn' <- D.handleDialogEvent ev yn
 
@@ -140,13 +140,13 @@ handleDialogEvent state@State { _yesNo = (Just yn) } (T.VtyEvent ev) = do
 handleDialogEvent state _ = M.continue state
 
 -- Return the yes no dialog if the current game is finished
-showYesNoIfNeeded :: State -> Maybe (D.Dialog YesNo)
+showYesNoIfNeeded :: GameState -> Maybe (D.Dialog YesNo)
 showYesNoIfNeeded state | status (state ^. game) == Continue = Nothing
                         | otherwise                          = Just yesNoDialog
 
 -- Handle the editor events
-handleEditorEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
-handleEditorEvent state@State { _editor = e, _game = g } (T.VtyEvent ev) = do
+handleEditorEvent :: GameState -> T.BrickEvent Name e -> T.EventM Name (T.Next GameState)
+handleEditorEvent state@GameState { _editor = e, _game = g } (T.VtyEvent ev) = do
   -- The new editor with event handled
   editor' <- E.handleEditorEvent ev e
   -- Its content
@@ -170,34 +170,36 @@ handleEditorEvent state _ = M.continue state
 no :: D.Dialog YesNo -> D.Dialog YesNo
 no d = d & D.dialogSelectedIndexL ?~ 1
 
-dialogVisible :: State -> Bool
+-- Is the dialog visible ie does it exists
+dialogVisible :: GameState -> Bool
 dialogVisible s = isJust (s ^. yesNo)
 
 -- Return the current widget
-frontWidget :: State -> Widget
+frontWidget :: GameState -> Widget
 frontWidget state | dialogVisible state = Dialog $ fromJust $ state ^. yesNo
                   | otherwise           = Editor $ state ^. editor
 
 -- Event dispatcher
-handleEvent :: Widget -> State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
+handleEvent :: Widget -> GameState -> T.BrickEvent Name e -> T.EventM Name (T.Next GameState)
 handleEvent (Dialog d) = handleDialogEvent
 handleEvent (Editor e) = handleEditorEvent
 
 -- Event handler
-appEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
+appEvent :: GameState -> T.BrickEvent Name e -> T.EventM Name (T.Next GameState)
 -- Quit the game
 appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = 
   M.halt $ state & yesNo ?~ no yesNoDialog
 -- Main event handler
 appEvent state ev = handleEvent (frontWidget state) state ev
 
+-- Selected button black
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
     [ (D.buttonSelectedAttr, bg V.black)
     ]
 
 -- Main record for the brick application
-theApp :: M.App State e Name
+theApp :: M.App GameState e Name
 theApp =
     M.App { M.appDraw         = drawUI
           , M.appChooseCursor = M.showFirstCursor
@@ -224,5 +226,5 @@ main = do
           game' = draw (createGame nbTrials ['0'..'9']) 4 gen
       -- print $ game' ^. getSecret
       -- c <- getChar
-      state' <- M.defaultMain theApp (State game' defaultEditor Nothing)
+      state' <- M.defaultMain theApp (GameState game' defaultEditor Nothing)
       print $ show (D.dialogSelection $ fromJust $ state' ^. yesNo)
