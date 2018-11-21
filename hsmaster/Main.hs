@@ -32,7 +32,6 @@ import qualified Text.Read                     as TR
 import           Game
 
 -- TODO
--- Add message: Another game ?
 -- Replace by microlens-platform
 -- Move command line in a separate module
 -- Esc give up
@@ -92,11 +91,11 @@ yesNoDialog = D.dialog Nothing (Just (0, choices)) 30
 
 -- Draw the dialog
 drawDialog :: State -> T.Widget Name
-drawDialog State { _yesNo = Just yn, _game = game } =   
-  dialog $ C.hCenter $ padAll 1 $ str $ endStr ++ " Another game ?"
-  where
-    dialog = D.renderDialog yn
-    endStr = fromMaybe "" (endMsg $ status game)
+drawDialog State { _yesNo = Just yn, _game = game } =
+  case endMsg $ status game of
+    Nothing      -> emptyWidget
+    Just endStr  -> D.renderDialog yn $ C.hCenter $ padAll 1 
+                    $ str $ endStr ++ " Another game ?"
 drawDialog _ = emptyWidget
 
 -- Draw the main widget
