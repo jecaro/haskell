@@ -35,6 +35,9 @@ import           Game
 -- Add message: Another game ?
 -- Replace by microlens-platform
 -- Move command line in a separate module
+-- Esc give up
+-- Implement loop
+-- h to show the secret word
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
@@ -82,6 +85,7 @@ endMsg Won  = Just "You won !"
 endMsg Lost = Just "You loose !"
 endMsg _    = Nothing
 
+-- Create the yes no dialog
 yesNoDialog :: D.Dialog YesNo
 yesNoDialog = D.dialog Nothing (Just (0, choices)) 30
   where choices = [("Yes", Yes), ("No", No)]
@@ -112,6 +116,7 @@ drawUI state = [msgWidget, mainWidget]
       , str "> " <+> e
       ]
 
+-- Handle the dialog events
 handleDialogEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 handleDialogEvent state@State { _yesNo = (Just yn) } (T.VtyEvent ev) = do
   -- Handle event
@@ -125,12 +130,16 @@ handleDialogEvent state@State { _yesNo = (Just yn) } (T.VtyEvent ev) = do
   if ev == V.EvKey V.KEnter [] || ev == V.EvKey V.KEsc [] 
   then M.halt state'
   else M.continue state'
+
+-- The dialog is not visible, this should not happen
 handleDialogEvent state _ = M.continue state
 
+-- Return the yes no dialog if the current game is finished
 showYesNoIfNeeded :: State -> Maybe (D.Dialog YesNo)
 showYesNoIfNeeded state | status (state ^. game) == Continue = Nothing
                         | otherwise                          = Just yesNoDialog
 
+-- Handle the editor events
 handleEditorEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 handleEditorEvent state (T.VtyEvent ev) = do
   -- The new editor with event handled
@@ -157,21 +166,21 @@ no d = d & D.dialogSelectedIndexL ?~ 1
 dialogVisible :: State -> Bool
 dialogVisible s = isJust (s ^. yesNo)
 
+-- Return the current widget
 frontWidget :: State -> Widget
 frontWidget state | dialogVisible state = Dialog $ fromJust $ state ^. yesNo
                   | otherwise           = Editor $ state ^. editor
 
+-- Event dispatcher
 handleEvent :: Widget -> State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 handleEvent (Dialog d) = handleDialogEvent
 handleEvent (Editor e) = handleEditorEvent
 
-stop :: State -> State
-stop state = state & yesNo ?~ no yesNoDialog
-
 -- Event handler
 appEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 -- Quit the game
-appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt $ stop state
+appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = 
+  M.halt $ state & yesNo ?~ no yesNoDialog
 -- Main event handler
 appEvent state ev = handleEvent (frontWidget state) state ev
 
