@@ -33,14 +33,18 @@ import           Game
 
 -- TODO
 -- Add message: Another game ?
+-- Replace by microlens-platform
+-- Move command line in a separate module
 
 data Name = Prompt
           deriving (Ord, Show, Eq)
 
 data YesNo = Yes | No deriving Show
 
+data Widget = Editor (E.Editor String Name) | Dialog (D.Dialog YesNo)
+
 data State = State { _game   :: Game
-                   , _editor :: E.Editor String Name
+                   , _editor :: E.Editor String Name 
                    , _yesNo  :: Maybe (D.Dialog YesNo)
                    }
 makeLenses ''State
@@ -79,23 +83,20 @@ endMsg Lost = Just "You loose !"
 endMsg _    = Nothing
 
 yesNoDialog :: D.Dialog YesNo
-yesNoDialog = D.dialog Nothing (Just (1, choices)) 30
+yesNoDialog = D.dialog Nothing (Just (0, choices)) 30
   where choices = [("Yes", Yes), ("No", No)]
-
-no :: D.Dialog YesNo -> D.Dialog YesNo
-no d = d & D.dialogSelectedIndexL ?~ 1
 
 -- Rendering function
 drawUI :: State -> [T.Widget Name]
 drawUI state = [msgWidget, mainWidget]
   where
     msgWidget
-      | isJust $ state ^. yesNo = dialog $ C.hCenter $ padAll 1 
+      | isJust $ state ^. yesNo = dialog $ C.hCenter $ padAll 1
                                   $ str $ endStr ++ " Another game ?"
       | otherwise               = emptyWidget
-        where 
+        where
           dialog = D.renderDialog (fromJust $ state ^. yesNo)
-          endStr = fromMaybe "" (endMsg $ status (state ^. game)) 
+          endStr = fromMaybe "" (endMsg $ status (state ^. game))
     g          = state ^. game
     e          = E.renderEditor (str . unlines) True $ state ^. editor
     guesses    = reverse $ take (g ^. getNbTrials) $ g ^. getGuesses ++ repeat ""
@@ -111,38 +112,68 @@ drawUI state = [msgWidget, mainWidget]
       , str "> " <+> e
       ]
 
+handleDialogEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
+handleDialogEvent state@State { _yesNo = (Just yn) } (T.VtyEvent ev) = do
+  -- Handle event
+  yn' <- D.handleDialogEvent ev yn
+
+  -- Toggle no if esc has been pressed
+  let toggle = if ev == V.EvKey V.KEsc [] then no else id
+      state' = state & yesNo ?~ toggle yn'
+
+  -- Enter or esc stop the event loop
+  if ev == V.EvKey V.KEnter [] || ev == V.EvKey V.KEsc [] 
+  then M.halt state'
+  else M.continue state'
+handleDialogEvent state _ = M.continue state
+
+showYesNoIfNeeded :: State -> Maybe (D.Dialog YesNo)
+showYesNoIfNeeded state | status (state ^. game) == Continue = Nothing
+                        | otherwise                          = Just yesNoDialog
+
+handleEditorEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
+handleEditorEvent state (T.VtyEvent ev) = do
+  -- The new editor with event handled
+  editor' <- E.handleEditorEvent ev (state ^. editor)
+  -- Its content
+  let guess = unwords $ E.getEditContents editor'
+  -- We check the validity of the typed guess
+  if not $ validPartialGuess (state ^. game) guess
+    then M.continue state
+    else
+      let state' = if not $ validGuess (state ^. game) guess
+                   -- The guess is not long enough, carry on
+                   then state & editor .~ editor'
+                   -- The guess is ok, append it to the guess list
+                   -- and reset the editor
+                   else state & editor %~ E.applyEdit Z.clearZipper 
+                              & game %~ addGuess guess
+      in  M.continue $ state' & yesNo .~ showYesNoIfNeeded state'
+handleEditorEvent state _ = M.continue state
+
+no :: D.Dialog YesNo -> D.Dialog YesNo
+no d = d & D.dialogSelectedIndexL ?~ 1
+
+dialogVisible :: State -> Bool
+dialogVisible s = isJust (s ^. yesNo)
+
+frontWidget :: State -> Widget
+frontWidget state | dialogVisible state = Dialog $ fromJust $ state ^. yesNo
+                  | otherwise           = Editor $ state ^. editor
+
+handleEvent :: Widget -> State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
+handleEvent (Dialog d) = handleDialogEvent
+handleEvent (Editor e) = handleEditorEvent
+
+stop :: State -> State
+stop state = state & yesNo ?~ no yesNoDialog
+
 -- Event handler
 appEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
 -- Quit the game
-appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt $ state & yesNo ?~ no yesNoDialog
+appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt $ stop state
 -- Main event handler
-appEvent state (T.VtyEvent ev) = 
-    if isJust (state ^. yesNo) 
-    then do 
-      yesNo' <- D.handleDialogEvent ev $ fromJust $ state ^. yesNo
-      if ev == V.EvKey V.KEnter [] || ev == V.EvKey V.KEsc [] --toggleNo
-      then M.halt $ state & (yesNo ?~ yesNo')
-      else M.continue $ state & (yesNo ?~ yesNo')
-    else do
-      -- The new editor with event handled
-      editor' <- E.handleEditorEvent ev (state ^. editor)
-      -- Its content
-      let guess = unwords $ E.getEditContents editor'
-      -- We check the validity of the typed guess
-      if not $ validPartialGuess (state ^. game) guess
-        then M.continue state
-        else
-          let state' = if not $ validGuess (state ^. game) guess
-              -- The guess is not long enough, carry on
-                then state & editor .~ editor'
-              -- The guess is ok, append it to the guess list
-              -- and reset the editor
-                else state & editor %~ E.applyEdit Z.clearZipper
-                           & game   %~ addGuess guess
-          in M.continue $ state' & yesNo .~ (case status (state' ^. game) of 
-                                             Continue -> Nothing
-                                             _ -> Just yesNoDialog)
-appEvent game _ = M.continue game
+appEvent state ev = handleEvent (frontWidget state) state ev
 
 theMap :: A.AttrMap
 theMap = A.attrMap V.defAttr
@@ -175,7 +206,7 @@ main = do
       -- Init the game and start it
       let defaultEditor = E.editor Prompt (Just 1) ""
           game' = draw (createGame nbTrials ['0'..'9']) 4 gen
-      print $ game' ^. getSecret
-      c <- getChar 
+      -- print $ game' ^. getSecret
+      -- c <- getChar
       state' <- M.defaultMain theApp (State game' defaultEditor Nothing)
       print $ show (D.dialogSelection $ fromJust $ state' ^. yesNo)
