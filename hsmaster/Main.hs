@@ -112,14 +112,14 @@ drawMain State { _game = g, _editor = e } =
   ]
   where
     nbTrials   = g ^. getNbTrials
-    re         = E.renderEditor (str . unlines) True e
     guesses    = reverse $ take nbTrials $ g ^. getGuesses ++ repeat ""
     fstCol     = map (intersperse ' ') guesses
     sndCol     = map (showHint g) guesses
+    re         = E.renderEditor (str . unlines) True e
 
 -- Rendering function
 drawUI :: State -> [T.Widget Name]
-drawUI state = [drawDialog state, drawMain state]
+drawUI state = [ f state | f <- [drawDialog, drawMain] ]
 
 -- Handle the dialog events
 handleDialogEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
@@ -146,22 +146,24 @@ showYesNoIfNeeded state | status (state ^. game) == Continue = Nothing
 
 -- Handle the editor events
 handleEditorEvent :: State -> T.BrickEvent Name e -> T.EventM Name (T.Next State)
-handleEditorEvent state (T.VtyEvent ev) = do
+handleEditorEvent state@State { _editor = e, _game = g } (T.VtyEvent ev) = do
   -- The new editor with event handled
-  editor' <- E.handleEditorEvent ev (state ^. editor)
+  editor' <- E.handleEditorEvent ev e
   -- Its content
   let guess = unwords $ E.getEditContents editor'
   -- We check the validity of the typed guess
-  if not $ validPartialGuess (state ^. game) guess
+  if not $ validPartialGuess g guess
     then M.continue state
     else
-      let state' = if not $ validGuess (state ^. game) guess
+      let state' = if not $ validGuess g guess
                    -- The guess is not long enough, carry on
                    then state & editor .~ editor'
                    -- The guess is ok, append it to the guess list
                    -- and reset the editor
                    else state & editor %~ E.applyEdit Z.clearZipper 
-                              & game %~ addGuess guess
+                              & game   %~ addGuess guess
+      -- If the guess is right or the number of trials is max then we need to 
+      -- show the end dialog
       in  M.continue $ state' & yesNo .~ showYesNoIfNeeded state'
 handleEditorEvent state _ = M.continue state
 
