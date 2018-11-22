@@ -31,8 +31,6 @@ import           Ui
 -- Replace by microlens-platform
 -- Esc give up
 -- h to show the secret word
--- fromJust
--- elemIndex -> lens
 -- Dialog below the main widget
 
 -- Get the number of trials from arg list
@@ -72,7 +70,6 @@ main = do
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      -- Refactor this
       let nbTrials = fromMaybe 10 $ getNbTrialsFromArgs args
       -- Random number generator
       gen <- getStdGen

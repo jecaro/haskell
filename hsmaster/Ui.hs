@@ -158,8 +158,8 @@ dialogVisible s = isJust (s ^. yesNo)
 
 -- Return the current widget
 frontWidget :: GameState -> Widget
-frontWidget state | dialogVisible state = Dialog $ fromJust $ state ^. yesNo
-                  | otherwise           = Editor $ state ^. editor
+frontWidget GameState { _yesNo = Just yn } = Dialog yn
+frontWidget GameState { _editor = e }      = Editor e
 
 -- Event dispatcher
 handleEvent :: Widget -> GameState -> T.BrickEvent Name e -> T.EventM Name (T.Next GameState)
