@@ -7,6 +7,8 @@ module Ui
 )
 where
 
+import           Control.Monad
+
 import qualified Brick.AttrMap                 as A
 import qualified Brick.Main                    as M
 import qualified Brick.Types                   as T
@@ -47,12 +49,10 @@ createGameState game = GameState game editor Nothing
 
 getAnotherGame :: GameState -> Maybe Bool
 getAnotherGame GameState { _yesNo = Nothing } = Nothing
-getAnotherGame GameState { _game = game, _yesNo = (Just ynd) } = 
-  case status game of
-    Continue -> Nothing
-    _        -> case D.dialogSelection ynd of
-      Nothing -> Nothing
-      Just yn -> Just $ yn == Yes
+getAnotherGame GameState { _game = game, _yesNo = (Just yn) } = do 
+  guard $ status game /= Continue
+  button <- D.dialogSelection yn
+  return $ button == Yes
 
 -- Show the hint for a word
 showHint :: Game -> String -> String
