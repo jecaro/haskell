@@ -82,7 +82,8 @@ shuffle list = do
 
 -- Find a new secret for the game
 draw :: RandomGen g => Game -> Int -> g -> Game
-draw game nbLetters gen = game & secret .~ secret'
+draw game nbLetters gen = game & secret  .~ secret'
+                               & guesses .~ []
   where secret' = take nbLetters $ evalState (shuffle $ game ^. values) gen 
 
 -- Compute the status of the game
