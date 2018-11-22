@@ -13,6 +13,7 @@ dependencies:
 - text
 - text-zipper
 - vty
+- MonadRandom
 name: hsmaster
 version: 0.1.0.0
 extra-source-files:

@@ -21,14 +21,13 @@ module Game
 where
 
 import           Control.Monad.State
+import           Control.Monad.Random
 import           Data.List
 import           Lens.Micro
 import           Lens.Micro.TH
 import           Lens.Micro.Type
 import           System.Random
-
--- TODO 
--- Use system shuffle
+import           System.Random.Shuffle
 
 -- Main state of the game
 data Game = Game { _guesses  :: [String]
@@ -64,27 +63,12 @@ createGame n v =
        , _values = v
        , _secret = "" } 
 
--- Take a value at a specific index in a list
--- return this value along the remaining list
-pick :: [a] -> Int -> (a, [a])
-pick list ind = (list !! ind, start ++ end)
- where
-  start = take ind list
-  end   = drop (succ ind) list
-
--- Shuffle a list 
-shuffle :: RandomGen g => [a] -> State g [a]
-shuffle []   = return []
-shuffle list = do
-  ind <- state $ randomR (0, length list - 1)
-  let (val, list') = pick list ind
-  fmap (val :) (shuffle list')
-
--- Find a new secret for the game
-draw :: RandomGen g => Game -> Int -> g -> Game
-draw game nbLetters gen = game & secret  .~ secret'
-                               & guesses .~ []
-  where secret' = take nbLetters $ evalState (shuffle $ game ^. values) gen 
+-- Init a new game
+draw :: MonadRandom m => Game -> Int -> m Game
+draw game nbLetters = do 
+  shuffled <- shuffleM $ game ^. values
+  let secret' = take nbLetters shuffled
+  return $ game & secret .~ secret' & guesses .~ []
 
 -- Compute the status of the game
 status :: Game -> Status

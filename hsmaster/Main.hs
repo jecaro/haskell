@@ -6,8 +6,9 @@ import qualified Brick.Main                    as M
 import qualified Brick.Widgets.Dialog          as D
 import qualified Brick.Widgets.Edit            as E
 
-import           Control.Monad
 import           Control.Arrow                            ( (>>>) )
+import           Control.Monad
+import           Control.Monad.Trans.Random.Lazy
 
 import           Data.List
 import           Data.Maybe
@@ -55,12 +56,12 @@ usage = do
   putStrLn "-n 10\tSet the number of trials (default 10)"
 
 -- Recursive play function
-play :: RandomGen g => Game -> Int -> g -> IO()
+play :: RandomGen g => Game -> Int -> g -> IO ()
 play game nbLetters gen = do 
-  let newGame = draw game nbLetters gen
+  let (newGame, gen') = runRand (draw game nbLetters) gen
   state <- M.defaultMain theApp (createGameState newGame)
   when (getAnotherGame state == Just True) $
-    play game nbLetters gen
+    play game nbLetters gen'
 
 -- Main function
 main :: IO ()
