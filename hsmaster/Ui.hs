@@ -156,10 +156,6 @@ handleEditorEvent state _ = M.continue state
 no :: D.Dialog YesNo -> D.Dialog YesNo
 no d = d & D.dialogSelectedIndexL ?~ 1
 
--- Is the dialog visible ie does it exists
-dialogVisible :: GameState -> Bool
-dialogVisible s = isJust (s ^. yesNo)
-
 -- Return the current widget
 frontWidget :: GameState -> Widget
 frontWidget GameState { _yesNo = Just yn } = Dialog yn
