@@ -7,6 +7,7 @@ module Ui
 )
 where
 
+import           Control.Arrow                            ( (>>>) )
 import           Control.Monad
 
 import           Data.Ratio
@@ -130,8 +131,17 @@ showYesNoIfNeeded :: GameState -> Maybe (D.Dialog YesNo)
 showYesNoIfNeeded state | status (state ^. game) == Continue = Nothing
                         | otherwise                          = Just yesNoDialog
 
+-- Edit a zipper to write a message
+showMsg :: Monoid a => String -> Z.TextZipper a -> Z.TextZipper a
+showMsg msg = foldl (>>>) Z.clearZipper $ map Z.insertChar msg
+
 -- Handle the editor events
 handleEditorEvent :: GameState -> T.BrickEvent Name e -> T.EventM Name (T.Next GameState)
+-- Show the answer in the editor
+handleEditorEvent state (T.VtyEvent (V.EvKey (V.KChar 'h') [])) = 
+  M.continue $ state & editor %~ E.applyEdit (showMsg secret)
+  where secret = state ^. game . getSecret
+-- Main event handler
 handleEditorEvent state@GameState { _editor = e, _game = g } (T.VtyEvent ev) = do
   -- The new editor with event handled
   editor' <- E.handleEditorEvent ev e
@@ -171,7 +181,7 @@ appEvent :: GameState -> T.BrickEvent Name e -> T.EventM Name (T.Next GameState)
 -- Quit the game
 appEvent state (T.VtyEvent (V.EvKey V.KEsc [])) = 
   M.halt $ state & yesNo ?~ no yesNoDialog
--- Main event handler
+  -- Main event handler
 appEvent state ev = handleEvent (frontWidget state) state ev
 
 -- Selected button black

@@ -33,7 +33,6 @@ import           Ui
 -- TODO
 -- Replace by microlens-platform
 -- Esc give up
--- h to show the secret word
 
 -- Get the number of trials from arg list
 nbTrialsFromArgs :: [String] -> Maybe Int
@@ -82,8 +81,9 @@ main = do
     then usage
     else do
       let nbTrials = fromMaybe 10 $ nbTrialsFromArgs args
+      -- Init the game 
+      let game = createGame nbTrials ['0' .. '9']
       -- Random number generator
       gen <- getStdGen
-      -- Init the game and start it
-      let game = createGame nbTrials ['0' .. '9']
+      -- Start the game
       evalRandT (evalStateT (runReaderT play 4) game) gen
