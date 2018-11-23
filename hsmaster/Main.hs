@@ -8,7 +8,9 @@ import qualified Brick.Widgets.Edit            as E
 
 import           Control.Arrow                            ( (>>>) )
 import           Control.Monad
-import           Control.Monad.Trans.Random.Lazy
+import           Control.Monad.Trans.Random
+import           Control.Monad.Reader
+import           Control.Monad.State
 
 import           Data.List
 import           Data.Maybe
@@ -32,19 +34,24 @@ import           Ui
 -- Replace by microlens-platform
 -- Esc give up
 -- h to show the secret word
--- Dialog below the main widget
 
 -- Get the number of trials from arg list
-getNbTrialsFromArgs :: [String] -> Maybe Int
-getNbTrialsFromArgs args = do
+nbTrialsFromArgs :: [String] -> Maybe Int
+nbTrialsFromArgs args = do
   ind <- "-n" `elemIndex` args
   el  <- atMay args $ succ ind
-  TR.readMaybe el
+  nbTrialsFromString el
+ 
+nbTrialsFromString :: String -> Maybe Int
+nbTrialsFromString x = do 
+  nbTrials <- TR.readMaybe x
+  guard $ nbTrials >= 1
+  return nbTrials
 
--- Check the validity of the arg list
+-- Check the validity of the arg list 
 checkArgs :: [String] -> Bool
 checkArgs ("-n" : x : xs) =
-  isJust (TR.readMaybe x :: Maybe Int) && checkArgs xs
+  isJust (nbTrialsFromString x) && checkArgs xs
 checkArgs (x : xs) = x == "-h" && checkArgs xs
 checkArgs []       = True
 
@@ -56,12 +63,15 @@ usage = do
   putStrLn "-n 10\tSet the number of trials (default 10)"
 
 -- Recursive play function
-play :: RandomGen g => Game -> Int -> g -> IO ()
-play game nbLetters gen = do 
-  let (newGame, gen') = runRand (draw game nbLetters) gen
-  state <- M.defaultMain theApp (createGameState newGame)
-  when (getAnotherGame state == Just True) $
-    play game nbLetters gen'
+play :: RandomGen g => ReaderT Int (StateT Game (RandT g IO)) ()
+play = do
+  game <- get
+  nbLetters <- ask
+  game' <- draw game nbLetters
+  state <- liftIO $ M.defaultMain theApp (createGameState game')
+  when (getAnotherGame state == Just True) $ do
+    put game'
+    play
 
 -- Main function
 main :: IO ()
@@ -71,8 +81,9 @@ main = do
   if not (checkArgs args) || "-h" `elem` args
     then usage
     else do
-      let nbTrials = fromMaybe 10 $ getNbTrialsFromArgs args
+      let nbTrials = fromMaybe 10 $ nbTrialsFromArgs args
       -- Random number generator
       gen <- getStdGen
       -- Init the game and start it
-      play (createGame nbTrials ['0' .. '9']) 4 gen
+      let game = createGame nbTrials ['0' .. '9']
+      evalRandT (evalStateT (runReaderT play 4) game) gen
