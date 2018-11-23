@@ -9,6 +9,8 @@ where
 
 import           Control.Monad
 
+import           Data.Ratio
+
 import qualified Brick.AttrMap                 as A
 import qualified Brick.Main                    as M
 import qualified Brick.Types                   as T
@@ -76,8 +78,10 @@ drawDialog :: GameState -> T.Widget Name
 drawDialog GameState { _yesNo = Just yn, _game = game } =
   case endMsg $ status game of
     Nothing      -> emptyWidget
-    Just endStr  -> D.renderDialog yn $ C.hCenter $ padAll 1 
+    Just endStr  -> translateBy (T.Location (0, offset)) 
+                    $ D.renderDialog yn $ C.hCenter $ padAll 1 
                     $ str $ endStr ++ " Another game ?"
+    where offset = ceiling (game ^. getNbTrials % 2) + 5
 drawDialog _ = emptyWidget
 
 -- Draw the main widget
