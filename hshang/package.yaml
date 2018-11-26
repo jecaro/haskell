@@ -1,0 +1,21 @@
+copyright: 2018 Jean-Charles Quillet
+maintainer: jeancharles.quillet@gmail.com
+dependencies:
+- base >= 4.7 && < 5
+- random
+- mtl
+name: hshang
+version: 0.1.0.0
+#extra-source-files:
+author: Jean-Charles Quillet
+github: jecaro/haskell/hshang
+license: BSD3
+executables:
+  hshang:
+    source-dirs: ./
+    main: Main.hs
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+# description: 
