@@ -112,7 +112,7 @@ startPlay words count = do
 
   -- Getting answer
   answer <- getAnswer
-  when (answer == Yes) main
+  when (answer == Yes) $ startPlay words count
 
 -- Check if a word read in the file is valid
 validWord :: String -> Bool
