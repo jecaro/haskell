@@ -23,9 +23,7 @@ where
 import           Control.Monad.State
 import           Control.Monad.Random
 import           Data.List
-import           Lens.Micro
-import           Lens.Micro.TH
-import           Lens.Micro.Type
+import           Lens.Micro.Platform
 import           System.Random
 import           System.Random.Shuffle
 

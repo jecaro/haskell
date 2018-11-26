@@ -28,8 +28,7 @@ import qualified Data.Text.Zipper              as Z
 
 import qualified Graphics.Vty                  as V
 
-import           Lens.Micro
-import           Lens.Micro.TH
+import           Lens.Micro.Platform
 
 import           Game
   

@@ -15,7 +15,7 @@ import           Control.Monad.State
 import           Data.List
 import           Data.Maybe
 
-import           Lens.Micro
+import           Lens.Micro.Platform
 
 import           Safe
 
@@ -29,10 +29,6 @@ import qualified Text.Read                     as TR
 
 import           Game
 import           Ui
-
--- TODO
--- Replace by microlens-platform
--- Esc give up
 
 -- Get the number of trials from arg list
 nbTrialsFromArgs :: [String] -> Maybe Int
