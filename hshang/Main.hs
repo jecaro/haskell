@@ -15,8 +15,8 @@ alpha :: String
 alpha = ['a'..'z'] ++ ['A'..'Z']
 
 -- Convert the secret word to the form -x-y---
-guess :: String -> String -> String
-guess word chars = map (\x -> if x `elem` chars then x else '-') word
+hint :: String -> String -> String
+hint word chars = map (\x -> if x `elem` chars then x else '-') word
 
 -- Loop until the user send actual char
 getAlphaChar :: IO Char
@@ -50,10 +50,10 @@ play secret letters count = do
       let letters' = letters ++ [c]
 
       -- The hint word
-      let guess' = guess secret letters'
-      putStrLn guess'
+      let current = hint secret letters'
+      putStrLn current
 
-      if guess' == secret
+      if current == secret
         then putStrLn "You find it !"
         else do
             let count' = if c `elem` secret then count else count - 1 
@@ -104,7 +104,7 @@ startPlay words count = do
   let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
       chosen   = words !! val
 
-  putStrLn "Find the secret word ?"
+  putStrLn "Find the secret word !"
 
   play chosen [] count
 
