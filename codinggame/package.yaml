@@ -1,0 +1,100 @@
+copyright: 2018 Jean-Charles Quillet
+maintainer: jeancharles.quillet@gmail.com
+dependencies:
+- array
+- base >= 4.7 && < 5
+- containers
+- fgl
+- filepath
+- split
+name: codinggame
+version: 0.1.0.0
+#extra-source-files:
+author: Jean-Charles Quillet
+github: jecaro/haskell/hsmaster
+license: BSD3
+executables:
+# Easy puzzles
+  ascii-art:
+    source-dirs: ./easy/ascii-art
+    main: Main.hs
+  chuck-norris:
+    source-dirs: ./easy/chuck-norris
+    main: Main.hs
+  defibrillators:
+    source-dirs: ./easy/defibrillators
+    main: Main.hs
+  horse-racing-duals:
+    source-dirs: ./easy/horse-racing-duals
+    main: Main.hs
+  mars-lander-episode-1:
+    source-dirs: ./easy/mars-lander-episode-1
+    main: Main.hs
+  mime-type:
+    source-dirs: ./easy/mime-type
+    main: Main.hs
+  onboarding:
+    source-dirs: ./easy/onboarding
+    main: Main.hs
+  power-of-thor-episode-1:
+    source-dirs: ./easy/power-of-thor-episode-1
+    main: Main.hs
+  temperatures:
+    source-dirs: ./easy/temperatures
+    main: Main.hs
+  the-descent:
+    source-dirs: ./easy/the-descent
+    main: Main.hs
+# Medium puzzles
+  bender-episode-1:
+    source-dirs: ./medium/bender-episode-1
+    main: Main.hs
+  conway-sequence:
+    source-dirs: ./medium/conway-sequence
+    main: Main.hs
+  don't-panic-episode-1:
+    source-dirs: ./medium/don't-panic-episode-1
+    main: Main.hs
+  dwarfs-standing-on-the-shoulders-of-giants:
+    source-dirs: ./medium/dwarfs-standing-on-the-shoulders-of-giants
+    main: Main.hs
+  mars-lander-episode-2:
+    source-dirs: ./medium/mars-lander-episode-2
+    main: Main.hs
+  mayan-calculation:
+    source-dirs: ./medium/mayan-calculation
+    main: Main.hs
+  network-cabling:
+    source-dirs: ./medium/network-cabling
+    main: Main.hs
+  scrabble:
+    source-dirs: ./medium/scrabble
+    main: Main.hs
+  shadows-of-the-knight-episode-1:
+    source-dirs: ./medium/shadows-of-the-knight-episode-1
+    main: Main.hs
+  #skynet-revolution-episode-1:
+  #  source-dirs: ./medium/skynet-revolution-episode-1
+  #  main: Main.hs
+  stock-exchange-losses:
+    source-dirs: ./medium/stock-exchange-losses
+    main: Main.hs
+  teads-sponsored-contest:
+    source-dirs: ./medium/teads-sponsored-contest
+    main: Main.hs
+  telephone-numbers:
+    source-dirs: ./medium/telephone-numbers
+    main: Main.hs
+  the-gift:
+    source-dirs: ./medium/the-gift
+    main: Main.hs
+  the-last-crusade-episode-1:
+    source-dirs: ./medium/the-last-crusade-episode-1
+    main: Main.hs
+  there-is-no-spoon-episode-1:
+    source-dirs: ./medium/there-is-no-spoon-episode-1
+    main: Main.hs
+  winamax-battle:
+    source-dirs: ./medium/winamax-battle
+    main: Main.hs
+# description: 
