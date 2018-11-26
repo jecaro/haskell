@@ -73,9 +73,9 @@ executables:
   shadows-of-the-knight-episode-1:
     source-dirs: ./medium/shadows-of-the-knight-episode-1
     main: Main.hs
-  #skynet-revolution-episode-1:
-  #  source-dirs: ./medium/skynet-revolution-episode-1
-  #  main: Main.hs
+  skynet-revolution-episode-1:
+    source-dirs: ./medium/skynet-revolution-episode-1
+    main: Main.hs
   stock-exchange-losses:
     source-dirs: ./medium/stock-exchange-losses
     main: Main.hs

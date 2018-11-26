@@ -5,9 +5,10 @@ import Control.Monad
 import Data.Graph.Inductive
 import Data.Graph.Inductive.Query.SP
 
-import Data.Tuple
-import Data.Ord
 import Data.List
+import Data.Maybe
+import Data.Ord
+import Data.Tuple
 
 main :: IO ()
 main = do
@@ -45,7 +46,7 @@ loop n arcs gates = do
     let graph = emap (\x -> 1) $ undir (mkUGraph [0..n-1] arcs :: Gr () ())
 
     -- Les chemins pour aller vers les gates tries par taille
-    let paths = sortBy (comparing length) $ map (\x -> sp si x graph) gates
+    let paths = sortBy (comparing length) $ mapMaybe (\x -> sp si x graph) gates
 
     let soluceList = take 2 $ paths !! 0
     let soluce = (soluceList!!0, soluceList!!1)
