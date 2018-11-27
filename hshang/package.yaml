@@ -2,8 +2,9 @@ copyright: 2018 Jean-Charles Quillet
 maintainer: jeancharles.quillet@gmail.com
 dependencies:
 - base >= 4.7 && < 5
-- random
+- microlens-platform
 - mtl
+- random
 name: hshang
 version: 0.1.0.0
 #extra-source-files:
