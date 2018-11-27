@@ -15,6 +15,7 @@ import           Game
 
 -- TODO 
 -- show tried letters
+-- check if it is possible to create lens for functions in Game.hs
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -36,7 +37,7 @@ getAlphaChar = do
             putStrLn "This character is not allowed"
             getAlphaChar    
 
-play :: StateT GameState IO ()
+play :: StateT Game IO ()
 play = do
 
   gs <- get

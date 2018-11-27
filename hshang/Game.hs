@@ -3,7 +3,7 @@
 
 module Game 
   ( Status(..)
-  , GameState
+  , Game
   , initGame
   , getHint
   , getCount
@@ -17,33 +17,33 @@ import           Lens.Micro.Platform
  
 data Status = Won | Lost | Continue
 
-data GameState = GameState { _secret  :: String
+data Game = Game { _secret  :: String
                            , _letters :: String
                            , _count   :: Int}
-makeLenses ''GameState
+makeLenses ''Game
 
-initGame :: String -> Int -> GameState
-initGame word = GameState word [] 
+initGame :: String -> Int -> Game
+initGame word = Game word [] 
 
 -- Convert the secret word to the form -x-y---
-getHint :: GameState -> String
-getHint GameState{_secret = secret, _letters = letters} = 
+getHint :: Game -> String
+getHint Game{_secret = secret, _letters = letters} = 
   map (\x -> if x `elem` letters then x else '-') secret
 
-getCount :: SimpleGetter GameState Int
+getCount :: SimpleGetter Game Int
 getCount = count
 
-getLetters :: SimpleGetter GameState String
+getLetters :: SimpleGetter Game String
 getLetters = letters
 
-addChar :: GameState -> Char -> GameState
-addChar gs@GameState { _secret = s, _letters = l } c
+addChar :: Game -> Char -> Game
+addChar gs@Game { _secret = s, _letters = l } c
   | c `elem` l = gs
   | c `elem` s = gs & letters %~ ([c] ++)
   | otherwise  = gs & letters %~ ([c] ++) & count %~ pred 
   
-getStatus :: GameState -> Status
-getStatus GameState { _count = 0 } = Lost
-getStatus gs@GameState { _secret = secret }
+getStatus :: Game -> Status
+getStatus Game { _count = 0 } = Lost
+getStatus gs@Game { _secret = secret }
   | getHint gs == secret = Won
   | otherwise = Continue 
