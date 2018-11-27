@@ -14,8 +14,8 @@ import           Lens.Micro.Platform
 import           Game
 
 -- TODO 
--- show tried letters
 -- check if it is possible to create lens for functions in Game.hs
+-- sort letters
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -42,17 +42,17 @@ play = do
 
   gs <- get
 
-  -- The hint word
-  let hint = getHint gs
-  liftIO $ putStrLn hint
+  -- Print Status
+  liftIO $ do
+    putStrLn $ "Remaining trials:\t" ++ show (gs ^. getCount)
+    putStrLn $ "Guess:\t\t\t"        ++ getHint gs
+    putStrLn $ "Letters tried:\t\t"  ++ (gs ^. getLetters)
 
   case getStatus gs of
-    Won -> liftIO $ putStrLn "You find it !"
+    Won  -> liftIO $ putStrLn "You find it !"
     Lost -> liftIO $ putStrLn "No ! You've lost"
 
     Continue -> do 
-      -- Show the current number of trials
-      liftIO $ putStrLn $ "Still " ++ show (gs ^. getCount) ++ " trials"
 
       -- Get the char
       c <- liftIO getAlphaChar
@@ -61,7 +61,7 @@ play = do
       -- Check if we've already got it
       if c `elem` (gs ^. getLetters)
       then liftIO $ putStrLn "You already tried this letter !"
-      -- Update number of letters
+      -- Update state with adding the char
       else put $ addChar gs c
 
       play 
