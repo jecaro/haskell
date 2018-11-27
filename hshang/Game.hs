@@ -8,13 +8,11 @@ module Game
   , getHint
   , getCount
   , getLetters
-  , getSecret
-  , addChar
   , getStatus
+  , addChar
   )
 where
 
-import           Control.Monad.State
 import           Lens.Micro.Platform
  
 data Status = Won | Lost | Continue
@@ -25,44 +23,27 @@ data GameState = GameState { _secret  :: String
 makeLenses ''GameState
 
 initGame :: String -> Int -> GameState
-initGame word count = GameState word [] count
+initGame word = GameState word [] 
 
 -- Convert the secret word to the form -x-y---
-getHint :: MonadState GameState m => m String
-getHint = do
-  word    <- getSecret
-  letters <- getLetters
-  return $ map (\x -> if x `elem` letters then x else '-') word
+getHint :: GameState -> String
+getHint GameState{_secret = secret, _letters = letters} = 
+  map (\x -> if x `elem` letters then x else '-') secret
 
-getCount :: MonadState GameState m => m Int
-getCount = do
-  GameState { _count = count } <- get
-  return count
+getCount :: SimpleGetter GameState Int
+getCount = count
 
-getLetters :: MonadState GameState m => m String
-getLetters = do
-  GameState { _letters = letters } <- get
-  return letters
+getLetters :: SimpleGetter GameState String
+getLetters = letters
 
-getSecret :: MonadState GameState m => m String
-getSecret = do
-  GameState { _secret = secret } <- get
-  return secret
-
-addChar :: MonadState GameState m => Char -> m ()
-addChar c = do
-  gs <- get
-  let update = if c `elem` (gs ^. secret) then id else flip (-) 1
-  put $ gs & count %~ update & letters %~ ([c] ++)
-
-getStatus :: MonadState GameState m => m Status
-getStatus = do 
-  count <- getCount
-  if count == 0 
-  then return Lost 
-  else do 
-    hint <- getHint
-    secret <- getSecret
-    if secret == hint 
-    then return Won
-    else return Continue
+addChar :: GameState -> Char -> GameState
+addChar gs@GameState { _secret = s, _letters = l } c
+  | c `elem` l = gs
+  | c `elem` s = gs & letters %~ ([c] ++)
+  | otherwise  = gs & letters %~ ([c] ++) & count %~ pred 
+  
+getStatus :: GameState -> Status
+getStatus GameState { _count = 0 } = Lost
+getStatus gs@GameState { _secret = secret }
+  | getHint gs == secret = Won
+  | otherwise = Continue 

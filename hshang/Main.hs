@@ -14,8 +14,7 @@ import           Lens.Micro.Platform
 import           Game
 
 -- TODO 
--- show hint at start
--- add draw function in Game.hs
+-- show tried letters
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -39,34 +38,32 @@ getAlphaChar = do
 
 play :: StateT GameState IO ()
 play = do
-  status <- getStatus 
-  case status of
+
+  gs <- get
+
+  -- The hint word
+  let hint = getHint gs
+  liftIO $ putStrLn hint
+
+  case getStatus gs of
     Won -> liftIO $ putStrLn "You find it !"
     Lost -> liftIO $ putStrLn "No ! You've lost"
+
     Continue -> do 
-      count <- getCount
       -- Show the current number of trials
-      liftIO $ putStrLn $ "Still " ++ show count ++ " trials"
+      liftIO $ putStrLn $ "Still " ++ show (gs ^. getCount) ++ " trials"
 
       -- Get the char
       c <- liftIO getAlphaChar
       liftIO $ putStrLn ""
 
-      letters <- getLetters
-      if c `elem` letters
-      then do
-        liftIO $ putStrLn "You already tried this letter !"
-        play 
-      else do
-        -- Update number of letters
-        addChar c
+      -- Check if we've already got it
+      if c `elem` (gs ^. getLetters)
+      then liftIO $ putStrLn "You already tried this letter !"
+      -- Update number of letters
+      else put $ addChar gs c
 
-        secret <- getSecret
-        -- The hint word
-        hint <- getHint 
-        liftIO $ putStrLn hint
-
-        play 
+      play 
 
 -- Convert a string to an answer
 strToAnswer :: String -> Maybe Answer
