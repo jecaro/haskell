@@ -1,11 +1,4 @@
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TemplateHaskell #-}
-
 module Main where
-
--- TODO 
--- show hint at start
--- separate game logic in module
 
 -- For random numbers
 import           System.Random
@@ -18,14 +11,15 @@ import qualified Text.Read                     as T
 import           Control.Exception
 import           Lens.Micro.Platform
 
+import           Game
+
+-- TODO 
+-- show hint at start
+-- add draw function in Game.hs
+
 -- Simple data type to handle an answer
 data Answer = Yes | No 
     deriving Eq
-
-data GameState = GameState { _secret  :: String
-                           , _letters :: String
-                           , _count   :: Int}
-makeLenses ''GameState
 
 -- List of allowable chars
 alpha :: String
@@ -42,48 +36,6 @@ getAlphaChar = do
             putStrLn ""
             putStrLn "This character is not allowed"
             getAlphaChar    
-
--- Convert the secret word to the form -x-y---
-getHint :: MonadState GameState m => m String
-getHint = do
-  word    <- getSecret
-  letters <- getLetters
-  return $ map (\x -> if x `elem` letters then x else '-') word
-
-getCount :: MonadState GameState m => m Int
-getCount = do
-  GameState { _count = count } <- get
-  return count
-
-getLetters :: MonadState GameState m => m String
-getLetters = do
-  GameState { _letters = letters } <- get
-  return letters
-
-getSecret :: MonadState GameState m => m String
-getSecret = do
-  GameState { _secret = secret } <- get
-  return secret
-
-addChar :: MonadState GameState m => Char -> m ()
-addChar c = do
-  gs <- get
-  let update = if c `elem` (gs ^. secret) then id else flip (-) 1
-  put $ gs & count %~ update & letters %~ ([c] ++)
-
-data Status = Won | Lost | Continue
-
-getStatus :: MonadState GameState m => m Status
-getStatus = do 
-  count <- getCount
-  if count == 0 
-  then return Lost 
-  else do 
-    hint <- getHint
-    secret <- getSecret
-    if secret == hint 
-    then return Won
-    else return Continue
 
 play :: StateT GameState IO ()
 play = do
@@ -159,7 +111,7 @@ startPlay words count = do
 
   putStrLn "Find the secret word !"
 
-  runStateT play (GameState chosen [] count)
+  runStateT play (initGame chosen count)
 
   putStrLn "Another game ?"
 
