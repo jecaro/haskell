@@ -4,11 +4,14 @@
 module Game 
   ( Status(..)
   , Game
-  , initGame
+  -- Game creation
+  , createGame
+  -- Getters
   , getHint
   , getCount
   , getLetters
   , getStatus
+  -- Function
   , addChar
   )
 where
@@ -23,8 +26,8 @@ data Game = Game { _secret  :: String
                  , _count   :: Int}
 makeLenses ''Game
 
-initGame :: String -> Int -> Game
-initGame word = Game word [] 
+createGame :: String -> Int -> Game
+createGame word = Game word [] 
 
 -- Convert the secret word to the form -x-y---
 getHint' :: Game -> String

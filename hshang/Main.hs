@@ -108,7 +108,7 @@ startPlay words count = do
 
   putStrLn "Find the secret word !"
 
-  runStateT play (initGame chosen count)
+  runStateT play (createGame chosen count)
 
   putStrLn "Another game ?"
 
