@@ -52,7 +52,7 @@ createGameState game = GameState game editor Nothing
 getAnotherGame :: GameState -> Maybe Bool
 getAnotherGame GameState { _yesNo = Nothing } = Nothing
 getAnotherGame GameState { _game = game, _yesNo = (Just yn) } = do 
-  guard $ status game /= Continue
+  guard $ game ^. getStatus  /= Continue
   button <- D.dialogSelection yn
   return $ button == Yes
 
@@ -76,7 +76,7 @@ yesNoDialog = D.dialog Nothing (Just (0, choices)) 30
 -- Draw the dialog
 drawDialog :: GameState -> T.Widget Name
 drawDialog GameState { _yesNo = Just yn, _game = game } =
-  case endMsg $ status game of
+  case endMsg $ game ^. getStatus  of
     Nothing      -> emptyWidget
     Just endStr  -> translateBy (T.Location (0, offset)) 
                     $ D.renderDialog yn $ C.hCenter $ padAll 1 
@@ -127,8 +127,9 @@ handleDialogEvent state _ = M.continue state
 
 -- Return the yes no dialog if the current game is finished
 showYesNoIfNeeded :: GameState -> Maybe (D.Dialog YesNo)
-showYesNoIfNeeded state | status (state ^. game) == Continue = Nothing
-                        | otherwise                          = Just yesNoDialog
+showYesNoIfNeeded state 
+  | state ^. game . getStatus == Continue = Nothing
+  | otherwise                             = Just yesNoDialog
 
 -- Edit a zipper to write a message
 showMsg :: Monoid a => String -> Z.TextZipper a -> Z.TextZipper a

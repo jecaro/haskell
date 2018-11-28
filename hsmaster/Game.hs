@@ -7,14 +7,14 @@ module Game
   -- Functions
   , createGame
   , draw
-  , status
   , compute
   , validPartialGuess
-  , validGuess
+  , validGuess                      
   -- Getters
   , getNbTrials
   , getSecret
   , getGuesses
+  , getStatus
   -- Setters
   , addGuess
   )
@@ -69,8 +69,8 @@ draw game nbLetters = do
   return $ game & secret .~ secret' & guesses .~ []
 
 -- Compute the status of the game
-status :: Game -> Status
-status game 
+getStatus' :: Game -> Status
+getStatus' game 
   -- no guesses
   | null $ game ^. guesses = Continue
   -- win
@@ -79,6 +79,9 @@ status game
   | length (game ^. guesses) == game ^. nbTrials = Lost
   -- anything else
   | otherwise = Continue
+
+getStatus :: SimpleGetter Game Status
+getStatus = to getStatus'
 
 -- Compute the result of the guess
 compute :: Game -> String -> (Int, Int)
