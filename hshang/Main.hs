@@ -15,7 +15,6 @@ import           Game
 
 -- TODO 
 -- check if it is possible to create lens for functions in Game.hs
--- sort letters
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
