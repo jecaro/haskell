@@ -44,7 +44,7 @@ play = do
   -- Print Status
   liftIO $ do
     putStrLn $ "Remaining trials:\t" ++ show (gs ^. getCount)
-    putStrLn $ "Guess:\t\t\t"        ++ getHint gs
+    putStrLn $ "Guess:\t\t\t"        ++ (gs ^. getHint)
     putStrLn $ "Letters tried:\t\t"  ++ (gs ^. getLetters)
 
   case gs ^. getStatus  of

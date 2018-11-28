@@ -27,9 +27,12 @@ initGame :: String -> Int -> Game
 initGame word = Game word [] 
 
 -- Convert the secret word to the form -x-y---
-getHint :: Game -> String
-getHint Game { _secret = secret, _letters = letters } = 
+getHint' :: Game -> String
+getHint' Game { _secret = secret, _letters = letters } = 
   map (\x -> if x `elem` letters then x else '-') secret
+
+getHint :: SimpleGetter Game String
+getHint = to getHint'
 
 getCount :: SimpleGetter Game Int
 getCount = count
@@ -46,7 +49,7 @@ addChar gs@Game { _secret = s, _letters = l } c
 getStatus' :: Game -> Status
 getStatus' Game { _count = 0 } = Lost
 getStatus' gs@Game { _secret = secret }
-  | getHint gs == secret = Won
+  | gs ^. getHint == secret = Won
   | otherwise = Continue 
 
 getStatus :: SimpleGetter Game Status
