@@ -43,9 +43,11 @@ addChar gs@Game { _secret = s, _letters = l } c
   | c `elem` s = gs & letters %~ insert c
   | otherwise  = gs & letters %~ insert c & count %~ pred 
   
-getStatus :: Game -> Status
-getStatus Game { _count = 0 } = Lost
-getStatus gs@Game { _secret = secret }
+getStatus' :: Game -> Status
+getStatus' Game { _count = 0 } = Lost
+getStatus' gs@Game { _secret = secret }
   | getHint gs == secret = Won
   | otherwise = Continue 
 
+getStatus :: SimpleGetter Game Status
+getStatus = to getStatus'

@@ -47,7 +47,7 @@ play = do
     putStrLn $ "Guess:\t\t\t"        ++ getHint gs
     putStrLn $ "Letters tried:\t\t"  ++ (gs ^. getLetters)
 
-  case getStatus gs of
+  case gs ^. getStatus  of
     Won  -> liftIO $ putStrLn "You find it !"
     Lost -> liftIO $ putStrLn "No ! You've lost"
 
