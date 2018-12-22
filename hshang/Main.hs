@@ -1,15 +1,16 @@
 module Main where
 
--- For random numbers
-import           System.Random
-import           System.Environment
--- For when
-import           Control.Monad.State
--- For text -> Int conversion
-import qualified Text.Read                     as T
 -- For Exception handling
 import           Control.Exception
+-- For when
+import           Control.Monad.State
 import           Lens.Micro.Platform
+import           System.Environment
+import           System.IO
+-- For random numbers
+import           System.Random
+-- For text -> Int conversion
+import qualified Text.Read                     as T
 
 import           Game
 
@@ -125,6 +126,8 @@ validWord w = w == filtered
 main :: IO ()
 main = do
 
+  hSetBuffering stdin NoBuffering
+
   args <- getArgs
 
   case validateArgs args of
@@ -133,7 +136,7 @@ main = do
 
     Just (fileName, count) -> do
 
-        -- Read dictionary
+      -- Read dictionary
       dictOrExc <- try (readFile fileName) :: IO (Either SomeException String)
 
       case dictOrExc of
@@ -142,7 +145,7 @@ main = do
 
         Right dict   -> do
 
-            -- Clean up what we read in the file
+          -- Clean up what we read in the file
           let words = filter validWord $ map sanitize $ lines dict
           print words
           if null words
