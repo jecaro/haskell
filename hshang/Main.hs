@@ -17,7 +17,7 @@ import qualified Text.Read                     as T
 import           Game
 
 -- TODO 
--- refactor recursive functions with Monad.loops
+-- Improve IO
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -31,7 +31,7 @@ alpha = ['a'..'z'] ++ ['A'..'Z']
 getAlphaChar :: IO Char
 getAlphaChar = do
   putStrLn "What is you character ?"
-  untilJust (do 
+  untilJust $ do 
     c <- getChar
     if c `elem` alpha
       then return $ Just c
@@ -39,36 +39,48 @@ getAlphaChar = do
         putStrLn ""
         putStrLn "This character is not allowed"
         return Nothing
-      )
 
 play :: StateT Game IO ()
 play = do
 
-  gs <- get
+  untilM_ (do
+    
+    -- Print Status
+    count <- gets (view getCount)
+    liftIO $ putStrLn $ "Remaining trials:\t" ++ show count
 
-  -- Print Status
-  liftIO $ do
-    putStrLn $ "Remaining trials:\t" ++ show (gs ^. getCount)
-    putStrLn $ "Guess:\t\t\t"        ++ (gs ^. getHint)
-    putStrLn $ "Letters tried:\t\t"  ++ (gs ^. getLetters)
+    letters <- gets (view getLetters)
+    liftIO $ putStrLn $ "Letters tried:\t\t" ++ letters
+    
+    -- Get the next character
+    nextChar <- untilJust $ do
 
-  case gs ^. getStatus  of
-    Won  -> liftIO $ putStrLn "You find it !"
+        -- Get a char
+        c <- liftIO getAlphaChar
+        liftIO $ putStrLn ""
+        
+        -- Check if we've already got it
+        letters <- gets (view getLetters)
+        if c `elem` letters
+          then do
+            liftIO $ putStrLn "You already tried this letter !"
+            return Nothing
+          else return $ Just c
+    
+    -- Update state with adding the char
+    modify (`addChar` nextChar)
+    
+    -- Show the guess
+    hint <- gets (view getHint)
+    liftIO $ putStrLn $ "Guess:\t\t\t" ++ hint
+    )
+    $ (/= Continue) <$> gets (view getStatus)
+  
+  status <- gets (view getStatus)
+  case status of
+    Won  -> liftIO $ putStrLn "You find it !" 
     Lost -> liftIO $ putStrLn "No ! You've lost"
-
-    Continue -> do 
-
-      -- Get the char
-      c <- liftIO getAlphaChar
-      liftIO $ putStrLn ""
-
-      -- Check if we've already got it
-      if c `elem` (gs ^. getLetters)
-      then liftIO $ putStrLn "You already tried this letter !"
-      -- Update state with adding the char
-      else put $ addChar gs c
-
-      play 
+    _    -> liftIO $ putStrLn "Not possible !"
 
 -- Convert a string to an answer
 strToAnswer :: String -> Maybe Answer
@@ -104,15 +116,14 @@ validateArgs _ = Nothing
 
 -- Higher level loop
 startPlay :: [String] -> Int -> IO ()
-startPlay words count = 
-  untilM_ (do
-             gen <- newStdGen
-             let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
-                 chosen   = words !! val
-             putStrLn "Find the secret word !"
-             runStateT play (createGame chosen count)
-             putStrLn "Another game ?"
-           ) $ return (/= Yes) <*> getAnswer
+startPlay words count = untilM_ (do
+  gen <- newStdGen
+  let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
+      chosen   = words !! val
+  putStrLn "Find the secret word !"
+  runStateT play (createGame chosen count)
+  putStrLn "Another game ?"
+  ) $ return (/= Yes) <*> getAnswer
 
 -- Check if a word read in the file is valid
 validWord :: String -> Bool
