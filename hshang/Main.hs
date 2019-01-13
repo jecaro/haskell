@@ -4,6 +4,8 @@ module Main where
 import           Control.Exception
 -- For when
 import           Control.Monad.State
+import           Control.Monad.Loops
+import           Data.Maybe
 import           Lens.Micro.Platform
 import           System.Environment
 import           System.IO
@@ -15,7 +17,7 @@ import qualified Text.Read                     as T
 import           Game
 
 -- TODO 
--- check if it is possible to create lens for functions in Game.hs
+-- refactor recursive functions with Monad.loops
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -28,14 +30,16 @@ alpha = ['a'..'z'] ++ ['A'..'Z']
 -- Loop until the user send actual char
 getAlphaChar :: IO Char
 getAlphaChar = do
-    putStrLn "What is you character ?"
+  putStrLn "What is you character ?"
+  untilJust (do 
     c <- getChar
     if c `elem` alpha
-        then return c 
-        else do
-            putStrLn ""
-            putStrLn "This character is not allowed"
-            getAlphaChar    
+      then return $ Just c
+      else do
+        putStrLn ""
+        putStrLn "This character is not allowed"
+        return Nothing
+      )
 
 play :: StateT Game IO ()
 play = do
@@ -74,13 +78,12 @@ strToAnswer _ = Nothing
 
 -- Answer to the question would play again ?
 getAnswer :: IO Answer
-getAnswer = do
+getAnswer = untilJust $ do 
   cmd <- getLine
-  case strToAnswer cmd of
-    Nothing -> do 
-        putStrLn "I did not understand"
-        getAnswer
-    Just x -> return x
+  let strToAnswer' = strToAnswer cmd
+  when (isNothing strToAnswer') $
+    putStrLn "I did not understand"
+  return strToAnswer'
 
 -- Clean up a string at the beginning and the end
 sanitize :: String -> String
@@ -101,21 +104,15 @@ validateArgs _ = Nothing
 
 -- Higher level loop
 startPlay :: [String] -> Int -> IO ()
-startPlay words count = do
-
-  gen <- newStdGen
-  let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
-      chosen   = words !! val
-
-  putStrLn "Find the secret word !"
-
-  runStateT play (createGame chosen count)
-
-  putStrLn "Another game ?"
-
-  -- Getting answer
-  answer <- getAnswer
-  when (answer == Yes) $ startPlay words count
+startPlay words count = 
+  untilM_ (do
+             gen <- newStdGen
+             let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
+                 chosen   = words !! val
+             putStrLn "Find the secret word !"
+             runStateT play (createGame chosen count)
+             putStrLn "Another game ?"
+           ) $ return (/= Yes) <*> getAnswer
 
 -- Check if a word read in the file is valid
 validWord :: String -> Bool
@@ -147,7 +144,6 @@ main = do
 
           -- Clean up what we read in the file
           let words = filter validWord $ map sanitize $ lines dict
-          print words
           if null words
             then putStrLn "Empty dictionary"
             else startPlay words count

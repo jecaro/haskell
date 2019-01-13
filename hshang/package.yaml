@@ -3,6 +3,7 @@ maintainer: jeancharles.quillet@gmail.com
 dependencies:
 - base >= 4.7 && < 5
 - microlens-platform
+- monad-loops
 - mtl
 - random
 name: hshang
