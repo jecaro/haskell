@@ -46,10 +46,10 @@ play = do
   untilM_ (do
     
     -- Print Status
-    count <- gets (view getCount)
+    count <- use getCount
     liftIO $ putStrLn $ "Remaining trials:\t" ++ show count
 
-    letters <- gets (view getLetters)
+    letters <- use getLetters
     liftIO $ putStrLn $ "Letters tried:\t\t" ++ letters
     
     -- Get the next character
@@ -60,7 +60,7 @@ play = do
         liftIO $ putStrLn ""
         
         -- Check if we've already got it
-        letters <- gets (view getLetters)
+        letters <- use getLetters
         if c `elem` letters
           then do
             liftIO $ putStrLn "You already tried this letter !"
@@ -71,12 +71,12 @@ play = do
     modify (`addChar` nextChar)
     
     -- Show the guess
-    hint <- gets (view getHint)
+    hint <- use getHint
     liftIO $ putStrLn $ "Guess:\t\t\t" ++ hint
     )
-    $ (/= Continue) <$> gets (view getStatus)
+    $ (/= Continue) <$> use getStatus
   
-  status <- gets (view getStatus)
+  status <- use getStatus
   case status of
     Won  -> liftIO $ putStrLn "You find it !" 
     Lost -> liftIO $ putStrLn "No ! You've lost"
