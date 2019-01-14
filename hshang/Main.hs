@@ -7,6 +7,7 @@ import           Control.Monad.State
 import           Control.Monad.Loops
 import           Data.Maybe
 import           Lens.Micro.Platform
+import           System.Console.ANSI
 import           System.Environment
 import           System.IO
 -- For random numbers
@@ -18,6 +19,8 @@ import           Game
 
 -- TODO 
 -- Improve IO
+-- Handle \n
+-- Handle lower upper case
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -27,18 +30,30 @@ data Answer = Yes | No
 alpha :: String
 alpha = ['a'..'z'] ++ ['A'..'Z']
 
--- Loop until the user send actual char
-getAlphaChar :: IO Char
-getAlphaChar = do
-  putStrLn "What is you character ?"
+-- Loop until the user send a valid char
+getValidChar :: String -> IO Char
+getValidChar letters = do
+
+  saveCursor
+  putStr "Enter a character: "
+
   untilJust $ do 
+    -- Get the char
     c <- getChar
-    if c `elem` alpha
-      then return $ Just c
-      else do
-        putStrLn ""
-        putStrLn "This character is not allowed"
-        return Nothing
+    -- Restore cursor and clear up line
+    restoreCursor
+    clearFromCursorToLineEnd
+    -- Check if the char is valid
+    let errorMsg = case (c `elem` alpha, c `elem` letters) of
+                     (False, _) -> Just $ "The character " ++ [c] ++ " is not allowed, try again: "
+                     (_, True)  -> Just $ "You already tried " ++ [c] ++ ", try again: "
+                     _          -> Nothing
+    -- Return result
+    case errorMsg of
+      Nothing -> return $ Just c
+      Just str -> do
+        putStr str
+        return Nothing 
 
 play :: StateT Game IO ()
 play = do
@@ -53,22 +68,14 @@ play = do
     liftIO $ putStrLn $ "Letters tried:\t\t" ++ letters
     
     -- Get the next character
-    nextChar <- untilJust $ do
-
-        -- Get a char
-        c <- liftIO getAlphaChar
-        liftIO $ putStrLn ""
-        
-        -- Check if we've already got it
-        letters <- use getLetters
-        if c `elem` letters
-          then do
-            liftIO $ putStrLn "You already tried this letter !"
-            return Nothing
-          else return $ Just c
-    
-    -- Update state with adding the char
-    modify (`addChar` nextChar)
+    letters <- use getLetters
+    c <- liftIO $ getValidChar letters
+   
+    -- Pass a line
+    liftIO $ putStrLn ""
+            
+    -- Update state by adding the char
+    modify (`addChar` c)
     
     -- Show the guess
     hint <- use getHint
