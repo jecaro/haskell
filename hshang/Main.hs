@@ -6,6 +6,7 @@ import           Control.Exception
 import           Control.Monad.State
 import           Control.Monad.Loops
 import           Data.Maybe
+import           Data.Char
 import           Lens.Micro.Platform
 import           System.Console.ANSI
 import           System.Environment
@@ -20,7 +21,6 @@ import           Game
 -- TODO 
 -- Improve IO
 -- Handle \n
--- Handle lower upper case
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -39,7 +39,7 @@ getValidChar letters = do
 
   untilJust $ do 
     -- Get the char
-    c <- getChar
+    c <- toLower <$> getChar
     -- Restore cursor and clear up line
     restoreCursor
     clearFromCursorToLineEnd
@@ -125,6 +125,7 @@ validateArgs _ = Nothing
 startPlay :: [String] -> Int -> IO ()
 startPlay words count = untilM_ (do
   gen <- newStdGen
+  -- Need to refactor with safer version
   let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
       chosen   = words !! val
   putStrLn "Find the secret word !"
@@ -161,7 +162,7 @@ main = do
         Right dict   -> do
 
           -- Clean up what we read in the file
-          let words = filter validWord $ map sanitize $ lines dict
+          let words = filter validWord $ map (map toLower . sanitize) $ lines dict
           if null words
             then putStrLn "Empty dictionary"
             else startPlay words count
