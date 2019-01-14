@@ -50,10 +50,12 @@ getValidChar letters = do
                      _          -> Nothing
     -- Return result
     case errorMsg of
-      Nothing -> return $ Just c
       Just str -> do
         putStr str
         return Nothing 
+      Nothing -> do
+        putStrLn $ "Your char:\t\t" ++ [c]
+        return $ Just c
 
 play :: StateT Game IO ()
 play = do
@@ -71,9 +73,6 @@ play = do
     letters <- use getLetters
     c <- liftIO $ getValidChar letters
    
-    -- Pass a line
-    liftIO $ putStrLn ""
-            
     -- Update state by adding the char
     modify (`addChar` c)
     
@@ -92,17 +91,26 @@ play = do
 -- Convert a string to an answer
 strToAnswer :: String -> Maybe Answer
 strToAnswer "yes" = Just Yes
-strToAnswer "no" = Just No
-strToAnswer _ = Nothing
+strToAnswer "no"  = Just No
+strToAnswer _     = Nothing
 
 -- Answer to the question would play again ?
 getAnswer :: IO Answer
-getAnswer = untilJust $ do 
-  cmd <- getLine
-  let strToAnswer' = strToAnswer cmd
-  when (isNothing strToAnswer') $
-    putStrLn "I did not understand"
-  return strToAnswer'
+getAnswer = do
+  
+  putStr "Another game ? "
+
+  untilJust $ do 
+  
+    cmd <- getLine
+
+    let strToAnswer' = strToAnswer cmd
+    when (isNothing strToAnswer') $ do
+      cursorUpLine 1
+      clearFromCursorToLineEnd 
+      putStr "I did not understand, try again "
+
+    return strToAnswer'
 
 -- Clean up a string at the beginning and the end
 sanitize :: String -> String
@@ -124,13 +132,15 @@ validateArgs _ = Nothing
 -- Higher level loop
 startPlay :: [String] -> Int -> IO ()
 startPlay words count = untilM_ (do
+  -- Pick up random word
   gen <- newStdGen
   -- Need to refactor with safer version
   let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
       chosen   = words !! val
+
   putStrLn "Find the secret word !"
+  
   runStateT play (createGame chosen count)
-  putStrLn "Another game ?"
   ) $ return (/= Yes) <*> getAnswer
 
 -- Check if a word read in the file is valid
