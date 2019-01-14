@@ -18,10 +18,6 @@ import qualified Text.Read                     as T
 
 import           Game
 
--- TODO 
--- Improve IO
--- Handle \n
-
 -- Simple data type to handle an answer
 data Answer = Yes | No 
     deriving Eq
@@ -34,19 +30,21 @@ alpha = ['a'..'z'] ++ ['A'..'Z']
 getValidChar :: String -> IO Char
 getValidChar letters = do
 
-  saveCursor
   putStr "Enter a character: "
 
   untilJust $ do 
     -- Get the char
     c <- toLower <$> getChar
-    -- Restore cursor and clear up line
-    restoreCursor
+    -- Return go back up
+    when (c == '\n') $
+      cursorUpLine 1
+    -- Erase entire line
+    setCursorColumn 0
     clearFromCursorToLineEnd
     -- Check if the char is valid
     let errorMsg = case (c `elem` alpha, c `elem` letters) of
-                     (False, _) -> Just $ "The character " ++ [c] ++ " is not allowed, try again: "
-                     (_, True)  -> Just $ "You already tried " ++ [c] ++ ", try again: "
+                     (False, _) -> Just $ "The character " ++ show c ++ " is not allowed, try again: "
+                     (_, True)  -> Just $ "You already tried " ++ show c ++ ", try again: "
                      _          -> Nothing
     -- Return result
     case errorMsg of
