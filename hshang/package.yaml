@@ -1,8 +1,10 @@
 copyright: 2018 Jean-Charles Quillet
 maintainer: jeancharles.quillet@gmail.com
 dependencies:
+- ansi-terminal
 - base >= 4.7 && < 5
 - microlens-platform
+- monad-loops
 - mtl
 - random
 name: hshang

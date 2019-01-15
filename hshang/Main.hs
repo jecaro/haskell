@@ -1,20 +1,22 @@
 module Main where
 
--- For random numbers
-import           System.Random
-import           System.Environment
--- For when
-import           Control.Monad.State
--- For text -> Int conversion
-import qualified Text.Read                     as T
 -- For Exception handling
 import           Control.Exception
+-- For when
+import           Control.Monad.State
+import           Control.Monad.Loops
+import           Data.Maybe
+import           Data.Char
 import           Lens.Micro.Platform
+import           System.Console.ANSI
+import           System.Environment
+import           System.IO
+-- For random numbers
+import           System.Random
+-- For text -> Int conversion
+import qualified Text.Read                     as T
 
 import           Game
-
--- TODO 
--- check if it is possible to create lens for functions in Game.hs
 
 -- Simple data type to handle an answer
 data Answer = Yes | No 
@@ -24,62 +26,89 @@ data Answer = Yes | No
 alpha :: String
 alpha = ['a'..'z'] ++ ['A'..'Z']
 
--- Loop until the user send actual char
-getAlphaChar :: IO Char
-getAlphaChar = do
-    putStrLn "What is you character ?"
-    c <- getChar
-    if c `elem` alpha
-        then return c 
-        else do
-            putStrLn ""
-            putStrLn "This character is not allowed"
-            getAlphaChar    
+-- Loop until the user send a valid char
+getValidChar :: String -> IO Char
+getValidChar letters = do
+
+  putStr "Enter a character: "
+
+  untilJust $ do 
+    -- Get the char
+    c <- toLower <$> getChar
+    -- Return go back up
+    when (c == '\n') $
+      cursorUpLine 1
+    -- Erase entire line
+    setCursorColumn 0
+    clearFromCursorToLineEnd
+    -- Check if the char is valid
+    let errorMsg = case (c `elem` alpha, c `elem` letters) of
+                     (False, _) -> Just $ "The character " ++ show c ++ " is not allowed, try again: "
+                     (_, True)  -> Just $ "You already tried " ++ show c ++ ", try again: "
+                     _          -> Nothing
+    -- Return result
+    case errorMsg of
+      Just str -> do
+        putStr str
+        return Nothing 
+      Nothing -> do
+        putStrLn $ "Your char:\t\t" ++ [c]
+        return $ Just c
 
 play :: StateT Game IO ()
 play = do
 
-  gs <- get
+  untilM_ (do
+    
+    -- Print Status
+    count <- use getCount
+    liftIO $ putStrLn $ "Remaining trials:\t" ++ show count
 
-  -- Print Status
-  liftIO $ do
-    putStrLn $ "Remaining trials:\t" ++ show (gs ^. getCount)
-    putStrLn $ "Guess:\t\t\t"        ++ (gs ^. getHint)
-    putStrLn $ "Letters tried:\t\t"  ++ (gs ^. getLetters)
-
-  case gs ^. getStatus  of
-    Won  -> liftIO $ putStrLn "You find it !"
+    letters <- use getLetters
+    liftIO $ putStrLn $ "Letters tried:\t\t" ++ letters
+    
+    -- Get the next character
+    letters <- use getLetters
+    c <- liftIO $ getValidChar letters
+   
+    -- Update state by adding the char
+    modify (`addChar` c)
+    
+    -- Show the guess
+    hint <- use getHint
+    liftIO $ putStrLn $ "Guess:\t\t\t" ++ hint
+    )
+    $ (/= Continue) <$> use getStatus
+  
+  status <- use getStatus
+  case status of
+    Won  -> liftIO $ putStrLn "You find it !" 
     Lost -> liftIO $ putStrLn "No ! You've lost"
-
-    Continue -> do 
-
-      -- Get the char
-      c <- liftIO getAlphaChar
-      liftIO $ putStrLn ""
-
-      -- Check if we've already got it
-      if c `elem` (gs ^. getLetters)
-      then liftIO $ putStrLn "You already tried this letter !"
-      -- Update state with adding the char
-      else put $ addChar gs c
-
-      play 
+    _    -> liftIO $ putStrLn "Not possible !"
 
 -- Convert a string to an answer
 strToAnswer :: String -> Maybe Answer
 strToAnswer "yes" = Just Yes
-strToAnswer "no" = Just No
-strToAnswer _ = Nothing
+strToAnswer "no"  = Just No
+strToAnswer _     = Nothing
 
 -- Answer to the question would play again ?
 getAnswer :: IO Answer
 getAnswer = do
-  cmd <- getLine
-  case strToAnswer cmd of
-    Nothing -> do 
-        putStrLn "I did not understand"
-        getAnswer
-    Just x -> return x
+  
+  putStr "Another game ? "
+
+  untilJust $ do 
+  
+    cmd <- getLine
+
+    let strToAnswer' = strToAnswer cmd
+    when (isNothing strToAnswer') $ do
+      cursorUpLine 1
+      clearFromCursorToLineEnd 
+      putStr "I did not understand, try again "
+
+    return strToAnswer'
 
 -- Clean up a string at the beginning and the end
 sanitize :: String -> String
@@ -100,21 +129,17 @@ validateArgs _ = Nothing
 
 -- Higher level loop
 startPlay :: [String] -> Int -> IO ()
-startPlay words count = do
-
+startPlay words count = untilM_ (do
+  -- Pick up random word
   gen <- newStdGen
+  -- Need to refactor with safer version
   let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
       chosen   = words !! val
 
   putStrLn "Find the secret word !"
-
+  
   runStateT play (createGame chosen count)
-
-  putStrLn "Another game ?"
-
-  -- Getting answer
-  answer <- getAnswer
-  when (answer == Yes) $ startPlay words count
+  ) $ return (/= Yes) <*> getAnswer
 
 -- Check if a word read in the file is valid
 validWord :: String -> Bool
@@ -125,6 +150,8 @@ validWord w = w == filtered
 main :: IO ()
 main = do
 
+  hSetBuffering stdin NoBuffering
+
   args <- getArgs
 
   case validateArgs args of
@@ -133,7 +160,7 @@ main = do
 
     Just (fileName, count) -> do
 
-        -- Read dictionary
+      -- Read dictionary
       dictOrExc <- try (readFile fileName) :: IO (Either SomeException String)
 
       case dictOrExc of
@@ -142,9 +169,8 @@ main = do
 
         Right dict   -> do
 
-            -- Clean up what we read in the file
-          let words = filter validWord $ map sanitize $ lines dict
-          print words
+          -- Clean up what we read in the file
+          let words = filter validWord $ map (map toLower . sanitize) $ lines dict
           if null words
             then putStrLn "Empty dictionary"
             else startPlay words count

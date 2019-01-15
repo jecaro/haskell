@@ -19,11 +19,11 @@ where
 import           Data.List
 import           Lens.Micro.Platform
  
-data Status = Won | Lost | Continue
+data Status = Won | Lost | Continue deriving Eq
 
 data Game = Game { _secret  :: String
                  , _letters :: String
-                 , _count   :: Int}
+                 , _count   :: Int} 
 makeLenses ''Game
 
 createGame :: String -> Int -> Game
