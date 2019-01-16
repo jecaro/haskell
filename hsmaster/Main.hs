@@ -58,21 +58,29 @@ usage = do
   putStrLn $ progName ++ ": [-n 10]"
   putStrLn "-n 10\tSet the number of trials (default 10)"
 
+-- Modify the state with a monad action
+modifyM :: MonadState s m => (s -> m s) -> m ()
+modifyM f = get >>= f >>= put
+
 -- Main play function
 play :: RandomGen g => ReaderT Int (StateT Game (RandT g IO)) ()
 play = void $ untilJust (do
-    game <- get
-    nbLetters <- ask
 
-    game' <- draw game nbLetters
-    put game'
-    
-    state <- liftIO $ M.defaultMain theApp (createGameState game')
-    
-    return $ case getAnotherGame state of
-      Just False -> Just False
-      _          -> Nothing
-    )
+  -- Get the number of letters
+  nbLetters <- ask
+
+  -- Modify the state with drawing a new one
+  modifyM (`draw` nbLetters) 
+  
+  -- Get the game and play
+  game <- get
+  state <- liftIO $ M.defaultMain theApp (createGameState game)
+  
+  -- Check if the user wants to play again
+  return $ case getAnotherGame state of
+    Just False -> Just False
+    _          -> Nothing
+  )
 
 -- Main function
 main :: IO ()
@@ -85,7 +93,5 @@ main = do
       let nbTrials = fromMaybe 10 $ nbTrialsFromArgs args
       -- Init the game 
       let game = createGame nbTrials ['0' .. '9']
-      -- Random number generator
-      gen <- getStdGen
       -- Start the game
-      evalRandT (evalStateT (runReaderT play 4) game) gen
+      evalRandT (evalStateT (runReaderT play 4) game) =<< getStdGen  
