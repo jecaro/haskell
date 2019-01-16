@@ -100,9 +100,8 @@ getAnswer = do
 
   untilJust $ do 
   
-    cmd <- getLine
+    strToAnswer' <- fmap strToAnswer getLine
 
-    let strToAnswer' = strToAnswer cmd
     when (isNothing strToAnswer') $ do
       cursorUpLine 1
       clearFromCursorToLineEnd 
