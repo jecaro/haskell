@@ -62,8 +62,8 @@ createGame n v =
        , _secret = "" } 
 
 -- Init a new game
-draw :: MonadRandom m => Game -> Int -> m Game
-draw game nbLetters = do 
+draw :: MonadRandom m => Int -> Game -> m Game
+draw nbLetters game = do 
   shuffled <- shuffleM $ game ^. values
   let secret' = take nbLetters shuffled
   return $ game & secret .~ secret' & guesses .~ []

@@ -64,13 +64,10 @@ modifyM f = get >>= f >>= put
 
 -- Main play function
 play :: RandomGen g => ReaderT Int (StateT Game (RandT g IO)) ()
-play = void $ untilJust (do
-
-  -- Get the number of letters
-  nbLetters <- ask
+play = void $ untilJust $ do
 
   -- Modify the state with drawing a new one
-  modifyM (`draw` nbLetters) 
+  modifyM . draw =<< ask
   
   -- Get the game and play
   game <- get
@@ -80,7 +77,6 @@ play = void $ untilJust (do
   return $ case getAnotherGame state of
     Just False -> Just False
     _          -> Nothing
-  )
 
 -- Main function
 main :: IO ()
