@@ -53,8 +53,7 @@ getAnotherGame :: GameState -> Maybe Bool
 getAnotherGame GameState { _yesNo = Nothing } = Nothing
 getAnotherGame GameState { _game = game, _yesNo = (Just yn) } = do 
   guard $ game ^. getStatus  /= Continue
-  button <- D.dialogSelection yn
-  return $ button == Yes
+  return (== Yes) <*> D.dialogSelection yn
 
 -- Show the hint for a word
 showHint :: Game -> String -> String
