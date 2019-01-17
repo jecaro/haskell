@@ -68,7 +68,6 @@ play = do
     liftIO $ putStrLn $ "Letters tried:\t\t" ++ letters
     
     -- Get the next character
-    letters <- use getLetters
     c <- liftIO $ getValidChar letters
    
     -- Update state by adding the char
@@ -100,7 +99,7 @@ getAnswer = do
 
   untilJust $ do 
   
-    strToAnswer' <- fmap strToAnswer getLine
+    strToAnswer' <- strToAnswer <$> getLine
 
     when (isNothing strToAnswer') $ do
       cursorUpLine 1
@@ -132,13 +131,13 @@ startPlay words count = untilM_ (do
   -- Pick up random word
   gen <- newStdGen
   -- Need to refactor with safer version
-  let (val, _) = randomR (0, length words - 1) gen :: (Int, StdGen)
+  let (val, _) = randomR (0, length words - 1) gen
       chosen   = words !! val
 
   putStrLn "Find the secret word !"
   
   runStateT play (createGame chosen count)
-  ) $ return (/= Yes) <*> getAnswer
+  ) $ (/= Yes) <$> getAnswer
 
 -- Check if a word read in the file is valid
 validWord :: String -> Bool
